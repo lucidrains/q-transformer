@@ -19,6 +19,7 @@ setup(
   ],
   install_requires=[
     'einops>=0.6.1',
+    'robotic-transformer-pytorch>=0.1.0',
     'torch>=1.12'
   ],
   classifiers=[
