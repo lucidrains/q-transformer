@@ -1,6 +1,6 @@
 ## Q-transformer (wip)
 
-Implementation of <a href="https://q-transformer.github.io/">Q-Transformer</a>, Scalable Offline Reinforcement Learning via Autoregressive Q-Functions, out of Google Deepmind
+Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, Scalable Offline Reinforcement Learning via Autoregressive Q-Functions, out of Google Deepmind
 
 ## Citations
 
