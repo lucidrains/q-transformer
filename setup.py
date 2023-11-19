@@ -18,9 +18,10 @@ setup(
     'q-learning'
   ],
   install_requires=[
-    'einops>=0.6.1',
+    'einops>=0.7.0',
+    'ema-pytorch>=0.3.1',
     'robotic-transformer-pytorch>=0.1.0',
-    'torch>=1.12'
+    'torch>=2.0'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
