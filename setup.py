@@ -18,6 +18,7 @@ setup(
     'q-learning'
   ],
   install_requires=[
+    'beartype',
     'einops>=0.7.0',
     'ema-pytorch>=0.3.1',
     'classifier-free-guidance-pytorch>=0.1.4',

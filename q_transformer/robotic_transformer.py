@@ -1,9 +1,10 @@
 import torch
 import torch.nn.functional as F
 from torch import nn, einsum, Tensor
+from torch.nn import Module, ModuleList
 
-from typing import List, Optional, Callable, Tuple
 from beartype import beartype
+from beartype.typing import Union, List, Optional, Callable, Tuple, Dict, Any
 
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
@@ -42,15 +43,16 @@ def posemb_sincos_1d(seq, dim, temperature = 10000, device = None, dtype = torch
 
 # helper classes
 
-class Residual(nn.Module):
-    def __init__(self, fn):
+class Residual(Module):
+    @beartype
+    def __init__(self, fn: Module):
         super().__init__()
         self.fn = fn
 
     def forward(self, x):
         return self.fn(x) + x
 
-class LayerNorm(nn.Module):
+class LayerNorm(Module):
     def __init__(self, dim):
         super().__init__()
         self.gamma = nn.Parameter(torch.ones(dim))
@@ -59,7 +61,7 @@ class LayerNorm(nn.Module):
     def forward(self, x):
         return F.layer_norm(x, x.shape[-1:], self.gamma, self.beta)
 
-class FeedForward(nn.Module):
+class FeedForward(Module):
     def __init__(self, dim, mult = 4, dropout = 0.):
         super().__init__()
         inner_dim = int(dim * mult)
@@ -83,7 +85,7 @@ class FeedForward(nn.Module):
 
 # MBConv
 
-class SqueezeExcitation(nn.Module):
+class SqueezeExcitation(Module):
     def __init__(self, dim, shrinkage_rate = 0.25):
         super().__init__()
         hidden_dim = int(dim * shrinkage_rate)
@@ -101,7 +103,7 @@ class SqueezeExcitation(nn.Module):
         return x * self.gate(x)
 
 
-class MBConvResidual(nn.Module):
+class MBConvResidual(Module):
     def __init__(self, fn, dropout = 0.):
         super().__init__()
         self.fn = fn
@@ -112,7 +114,7 @@ class MBConvResidual(nn.Module):
         out = self.dropsample(out)
         return out + x
 
-class Dropsample(nn.Module):
+class Dropsample(Module):
     def __init__(self, prob = 0):
         super().__init__()
         self.prob = prob
@@ -157,7 +159,7 @@ def MBConv(
 
 # attention related classes
 
-class Attention(nn.Module):
+class Attention(Module):
     def __init__(
         self,
         dim,
@@ -259,7 +261,7 @@ class Attention(nn.Module):
         out = self.to_out(out)
         return rearrange(out, '(b x y) ... -> b x y ...', x = height, y = width)
 
-class MaxViT(nn.Module):
+class MaxViT(Module):
     def __init__(
         self,
         *,
@@ -294,7 +296,7 @@ class MaxViT(nn.Module):
         dims = (dim_conv_stem, *dims)
         dim_pairs = tuple(zip(dims[:-1], dims[1:]))
 
-        self.layers = nn.ModuleList([])
+        self.layers = ModuleList([])
 
         # shorthand for window size for efficient block - grid like attention
 
@@ -373,7 +375,7 @@ class MaxViT(nn.Module):
 
 # attention
 
-class TransformerAttention(nn.Module):
+class TransformerAttention(Module):
     def __init__(
         self,
         dim,
@@ -458,7 +460,7 @@ class TransformerAttention(nn.Module):
         return self.to_out(out)
 
 @beartype
-class Transformer(nn.Module):
+class Transformer(Module):
     def __init__(
         self,
         dim,
@@ -469,9 +471,9 @@ class Transformer(nn.Module):
         ff_dropout = 0.
     ):
         super().__init__()
-        self.layers = nn.ModuleList([])
+        self.layers = ModuleList([])
         for _ in range(depth):
-            self.layers.append(nn.ModuleList([
+            self.layers.append(ModuleList([
                 TransformerAttention(dim = dim, heads =  heads, dropout = attn_dropout),
                 FeedForward(dim = dim, dropout = ff_dropout)
             ]))
@@ -491,7 +493,7 @@ class Transformer(nn.Module):
 
 # token learner module
 
-class TokenLearner(nn.Module):
+class TokenLearner(Module):
     """
     https://arxiv.org/abs/2106.11297
     using the 1.1 version with the MLP (2 dense layers with gelu) for generating attention map
@@ -529,12 +531,13 @@ class TokenLearner(nn.Module):
 
 # Robotic Transformer
 
-@beartype
-class RT1(nn.Module):
+class RT1(Module):
+
+    @beartype
     def __init__(
         self,
         *,
-        vit: MaxViT,
+        vit: Union[Dict[str, Any], MaxViT],
         num_actions = 11,
         action_bins = 256,
         depth = 6,
@@ -552,6 +555,9 @@ class RT1(nn.Module):
         super().__init__()
 
         # vit
+
+        if isinstance(vit, dict):
+            vit = MaxViT(**vit)
 
         self.vit = vit
 
