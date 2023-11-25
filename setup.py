@@ -20,7 +20,7 @@ setup(
   install_requires=[
     'einops>=0.7.0',
     'ema-pytorch>=0.3.1',
-    'robotic-transformer-pytorch>=0.1.0',
+    'classifier-free-guidance-pytorch>=0.1.4',
     'torch>=2.0'
   ],
   classifiers=[
