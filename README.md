@@ -10,7 +10,8 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 
 ## Todo
 
-- [ ] first work way towards single action support
+- [x] first work way towards single action support
+
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [ ] do n-step Q learning, even though not that big of improvement
 - [ ] figure out the conservative regularization, read prior work
