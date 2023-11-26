@@ -20,6 +20,7 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 - [ ] improvise a cross attention variant instead of concatenating previous actions? (could have wrong intuition here)
 - [ ] see if the main idea in this paper is applicable to language models
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
+- [ ] offer batchnorm-less variant of maxvit, as done in SOTA weather model metnet3
 
 ## Citations
 

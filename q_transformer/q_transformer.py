@@ -1,7 +1,9 @@
+from functools import partial
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
+import torch.distributed as dist
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 from torch.utils.data import Dataset, DataLoader
@@ -199,17 +201,15 @@ class QLearner(Module):
         # 'next' stands for the very next time step (whether state, q, actions etc)
 
         γ = self.discount_factor_gamma
-        q_eval = self.model
-        q_target = self.ema_model
         not_terminal = (~done).float()
 
         # first make a prediction with online q robotic transformer
 
-        q_pred = batch_select_indices(q_eval(states, instructions), actions)
+        q_pred = batch_select_indices(self.model(states, instructions), actions)
 
         # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch
 
-        q_next = q_target(next_states, instructions).amax(dim = -1)
+        q_next = self.ema_model(next_states, instructions).amax(dim = -1)
 
         # Bellman's equation. most important line of code, hopefully done correctly
 

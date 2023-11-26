@@ -1,5 +1,8 @@
+from functools import cache
+
 import torch
 import torch.nn.functional as F
+import torch.distributed as dist
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 
@@ -29,6 +32,16 @@ def pack_one(x, pattern):
 
 def unpack_one(x, ps, pattern):
     return unpack(x, ps, pattern)[0]
+
+# sync batchnorm
+
+@cache
+def get_is_distributed():
+    return dist.is_initialized() and dist.get_world_size() > 1
+
+def MaybeSyncBatchnorm2d(is_distributed = None):
+    is_distributed = default(is_distributed, get_is_distributed())
+    return nn.SyncBatchNorm if is_distributed else nn.BatchNorm2d
 
 # sinusoidal positions
 
@@ -135,21 +148,23 @@ def MBConv(
     downsample,
     expansion_rate = 4,
     shrinkage_rate = 0.25,
-    dropout = 0.
+    dropout = 0.,
+    is_distributed = None
 ):
     hidden_dim = int(expansion_rate * dim_out)
     stride = 2 if downsample else 1
+    batchnorm_klass = MaybeSyncBatchnorm2d(is_distributed)
 
     net = nn.Sequential(
         nn.Conv2d(dim_in, hidden_dim, 1),
-        nn.BatchNorm2d(hidden_dim),
+        batchnorm_klass(hidden_dim),
         nn.GELU(),
         nn.Conv2d(hidden_dim, hidden_dim, 3, stride = stride, padding = 1, groups = hidden_dim),
-        nn.BatchNorm2d(hidden_dim),
+        batchnorm_klass(hidden_dim),
         nn.GELU(),
         SqueezeExcitation(hidden_dim, shrinkage_rate = shrinkage_rate),
         nn.Conv2d(hidden_dim, dim_out, 1),
-        nn.BatchNorm2d(dim_out)
+        batchnorm_klass(dim_out)
     )
 
     if dim_in == dim_out and not downsample:
