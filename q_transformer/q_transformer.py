@@ -52,17 +52,22 @@ class QLearner(Module):
         dataloader_kwargs: dict = dict(
             shuffle = True
         ),
-        ema_kwargs: dict = dict(
+        q_target_ema_kwargs: dict = dict(
             beta = 0.999,
             update_after_step = 10,
             update_every = 5
         ),
+        discount_factor_gamma = 0.99,
         optimizer_kwargs: dict = dict(),
         checkpoint_folder = './checkpoints',
         checkpoint_every = 1000,
     ):
         super().__init__()
         assert model.num_actions == 1
+
+        # q-learning related hyperparameters
+
+        self.discount_factor_gamma = discount_factor_gamma
 
         # online (evaluated) Q model
 
@@ -73,7 +78,7 @@ class QLearner(Module):
         self.ema_model = EMA(
             model,
             include_online_model = False,
-            **ema_kwargs
+            **q_target_ema_kwargs
         )
 
         self.optimizer = get_adam_optimizer(
@@ -168,11 +173,24 @@ class QLearner(Module):
 
     def forward(self):
         step = self.step.item()
+        replay_buffer_iter = cycle(self.dataloader)
 
         while step < self.num_train_steps:
 
+            # sample from replay buffer and q-learn
+
+            (
+                instruction,
+                state,
+                action,
+                next_state,
+                reward,
+                done
+            ) = next(replay_buffer_iter)
+
+            # increment step
+
             step += 1
-            self.print(step)
             self.step.add_(1)
 
             # whether to checkpoint or not

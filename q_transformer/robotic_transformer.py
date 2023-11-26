@@ -627,10 +627,13 @@ class QRoboticTransformer(Module):
     def forward(
         self,
         video,
-        texts: Optional[List[str]] = None,
+        texts: Optional[Union[List[str], Tuple[str]]] = None,
         cond_drop_prob = 0.,
         prev_action_bin_ids: Optional[Tensor] = None
     ):
+        if exists(texts) and isinstance(texts, tuple):
+            texts = list(texts)
+
         depth = self.transformer_depth
         cond_drop_prob = default(cond_drop_prob, self.cond_drop_prob)
 
