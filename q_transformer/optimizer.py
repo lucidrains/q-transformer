@@ -7,7 +7,7 @@ def separate_weight_decayable_params(params):
         param_list.append(param)
     return wd_params, no_wd_params
 
-def get_optimizer(
+def get_adam_optimizer(
     params,
     lr = 1e-4,
     wd = 1e-2,
