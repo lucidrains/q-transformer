@@ -531,7 +531,7 @@ class TokenLearner(Module):
 
 # Robotic Transformer
 
-class RT1(Module):
+class QRoboticTransformer(Module):
 
     @beartype
     def __init__(
