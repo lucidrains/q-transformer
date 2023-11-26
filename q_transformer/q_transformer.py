@@ -213,10 +213,12 @@ class QLearner(Module):
         not_terminal = (~done).float()
 
         # first make a prediction with online q robotic transformer
+        # select out the q-values for the action that was taken
 
         q_pred = batch_select_indices(self.model(states, instructions), actions)
 
         # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch
+        # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
 
