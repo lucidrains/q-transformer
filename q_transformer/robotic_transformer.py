@@ -613,10 +613,11 @@ class QRoboticTransformer(Module):
 
         self.cond_drop_prob = cond_drop_prob
 
-        self.to_logits = nn.Sequential(
+        self.to_q_values = nn.Sequential(
             LayerNorm(attend_dim),
             nn.Linear(attend_dim, num_actions * action_bins),
-            Rearrange('... (a b) -> ... a b', b = action_bins)
+            Rearrange('... (a b) -> ... a b', b = action_bins),
+            nn.Sigmoid()
         )
 
     @property
@@ -697,7 +698,11 @@ class QRoboticTransformer(Module):
 
         attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = ~attn_mask)
 
-        pooled = reduce(attended_tokens, 'b (f n) d -> b f d', 'mean', f = frames)
+        pooled = reduce(attended_tokens, 'b (f n) d -> b d', 'mean', f = frames)
 
-        logits = self.to_logits(pooled)
-        return logits
+        q_values = self.to_q_values(pooled)
+
+        if self.num_actions == 1:
+            q_values = rearrange(q_values, '... 1 b -> ... b')
+
+        return q_values

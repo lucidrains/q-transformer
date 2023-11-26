@@ -33,6 +33,17 @@ def cycle(dl):
         for batch in dl:
             yield batch
 
+# tensor helpers
+
+def batch_select_indices(t, indices):
+    batch = t.shape[0]
+    batch_arange = torch.arange(batch, device = indices.device)
+    batch_arange = rearrange(batch_arange, 'b -> b 1')
+    indices = rearrange(indices, 'b -> b 1')
+
+    selected = t[batch_arange, indices]
+    return rearrange(selected, 'b 1 -> b')
+
 # Q learning on robotic transformer
 
 class QLearner(Module):
@@ -159,6 +170,10 @@ class QLearner(Module):
         self.optimizer.load_state_dict(pkg['optimizer'])
 
     @property
+    def device(self):
+        return self.accelerator.device
+
+    @property
     def is_main(self):
         return self.accelerator.is_main_process
 
@@ -171,22 +186,77 @@ class QLearner(Module):
     def wait(self):
         return self.accelerator.wait_for_everyone()
 
+    def q_learn(
+        self,
+        instructions: Tuple[str],
+        states: Tensor,
+        actions: Tensor,
+        next_states: Tensor,
+        reward: Tensor,
+        done: Tensor
+    ) -> Tensor:
+
+        # 'next' stands for the very next time step (whether state, q, actions etc)
+
+        γ = self.discount_factor_gamma
+        q_eval = self.model
+        q_target = self.ema_model
+        not_terminal = (~done).float()
+
+        # first make a prediction with online q robotic transformer
+
+        q_pred = batch_select_indices(q_eval(states, instructions), actions)
+
+        # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch
+
+        q_next = q_target(next_states, instructions).amax(dim = -1)
+
+        # Bellman's equation. most important line of code, hopefully done correctly
+
+        q_target = reward + γ * not_terminal * q_next
+
+        # now just force the online model to be able to predict this target
+
+        loss = F.mse_loss(q_pred, q_target)
+
+        # that's it. 4 loc for the heart of q-learning
+        # return loss and some of the intermediates for logging
+
+        return loss, (q_pred, q_next, q_target)
+
     def forward(self):
         step = self.step.item()
+
         replay_buffer_iter = cycle(self.dataloader)
+
+        self.model.train()
+        self.ema_model.train()
 
         while step < self.num_train_steps:
 
-            # sample from replay buffer and q-learn
+            # zero grads
 
-            (
-                instruction,
-                state,
-                action,
-                next_state,
-                reward,
-                done
-            ) = next(replay_buffer_iter)
+            self.optimizer.zero_grad()
+
+            # main q-learning algorithm
+
+            with self.accelerator.autocast():
+
+                loss, _ = self.q_learn(*next(replay_buffer_iter))
+
+                self.accelerator.backward(loss)
+
+            self.print(f'loss: {loss.item():.3f}')
+
+            # take optimizer step
+
+            self.optimizer.step()
+
+            # update target ema
+
+            self.wait()
+
+            self.ema_model.update()
 
             # increment step
 
