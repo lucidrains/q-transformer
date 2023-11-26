@@ -1,5 +1,6 @@
-from functools import partial
 from pathlib import Path
+from functools import partial
+from collections import namedtuple
 
 import torch
 import torch.nn.functional as F
@@ -21,6 +22,14 @@ from q_transformer.optimizer import get_adam_optimizer
 from accelerate import Accelerator
 
 from ema_pytorch import EMA
+
+# constants
+
+QIntermediates = namedtuple('QIntermediates', [
+    'q_pred',
+    'q_next',
+    'q_target'
+])
 
 # helpers
 
@@ -196,7 +205,7 @@ class QLearner(Module):
         next_states: Tensor,
         reward: Tensor,
         done: Tensor
-    ) -> Tensor:
+    ) -> Tuple[Tensor, QIntermediates]:
 
         # 'next' stands for the very next time step (whether state, q, actions etc)
 
@@ -222,7 +231,7 @@ class QLearner(Module):
         # that's it. 4 loc for the heart of q-learning
         # return loss and some of the intermediates for logging
 
-        return loss, (q_pred, q_next, q_target)
+        return loss, QIntermediates(q_pred, q_next, q_target)
 
     def forward(self):
         step = self.step.item()
