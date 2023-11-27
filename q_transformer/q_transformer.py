@@ -220,7 +220,7 @@ class QLearner(Module):
         return self.accelerator.wait_for_everyone()
 
     def get_discount_matrix(self, timestep):
-        if exists(self.discount_matrix) and self.discount_matrix.shape[-1] <= timestep:
+        if exists(self.discount_matrix) and self.discount_matrix.shape[-1] >= timestep:
             return self.discount_matrix[:timestep, :timestep]
 
         timestep_arange = torch.arange(timestep, device = self.accelerator.device)
