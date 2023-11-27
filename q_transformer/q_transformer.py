@@ -224,7 +224,7 @@ class QLearner(Module):
 
         # Bellman's equation. most important line of code, hopefully done correctly
 
-        q_target = reward + γ * not_terminal * q_next
+        q_target = reward + not_terminal * (γ * q_next)
 
         # now just force the online model to be able to predict this target
 

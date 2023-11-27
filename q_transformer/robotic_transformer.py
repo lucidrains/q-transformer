@@ -639,6 +639,24 @@ class QRoboticTransformer(Module):
     def device(self):
         return next(self.parameters()).device
 
+    def get_random_actions(self, batch_size = 1):
+        return torch.randint(0, self.action_bins, (batch_size, self.num_actions), device = self.device)
+
+    def get_best_actions(
+        self,
+        *args,
+        return_q_values = False,
+        **kwargs
+    ):
+        q_values = self.forward(*args, **kwargs)
+
+        max_q, action_indices = q_values.max(dim = -1)
+
+        if not return_q_values:
+            return action_indices
+
+        return action_indices, max_q
+
     @classifier_free_guidance
     def forward(
         self,
