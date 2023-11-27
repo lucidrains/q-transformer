@@ -418,6 +418,7 @@ class TransformerAttention(Module):
         dim_head = 64,
         dim_context = None,
         heads = 8,
+        num_mem_kv = 4,
         norm_context = False,
         dropout = 0.1
     ):
@@ -436,6 +437,12 @@ class TransformerAttention(Module):
 
         self.to_q = nn.Linear(dim, inner_dim, bias = False)
         self.to_kv = nn.Linear(dim_context, dim_head * 2, bias = False)
+
+        self.num_mem_kv = num_mem_kv
+        self.mem_kv = None
+        if num_mem_kv > 0:
+            self.mem_kv = nn.Parameter(torch.randn(2, num_mem_kv, dim_head))
+
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim, bias = False),
             nn.Dropout(dropout)
@@ -468,6 +475,21 @@ class TransformerAttention(Module):
         q = rearrange(q, 'b n (h d) -> b h n d', h = self.heads)
 
         q = q * self.scale
+
+        if exists(self.mem_kv):
+            mk, mv = map(lambda t: repeat(t, '... -> b ...', b = b), self.mem_kv)
+
+            k = torch.cat((mk, k), dim = -2)
+            v = torch.cat((mv, v), dim = -2)
+
+            if exists(attn_bias) and self.num_mem_kv > 0:
+                attn_bias = F.pad(attn_bias, (self.num_mem_kv, 0), value = 0.)
+
+            if exists(mask):
+                mask = F.pad(mask, (self.num_mem_kv, 0), value = True)
+
+            if exists(attn_mask):
+                attn_mask = F.pad(attn_mask, (self.num_mem_kv, 0), value = True)
 
         sim = einsum('b h i d, b j d -> b h i j', q, k)
 
