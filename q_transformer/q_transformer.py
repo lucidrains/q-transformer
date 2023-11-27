@@ -58,10 +58,6 @@ def cycle(dl):
 
 # tensor helpers
 
-def reverse_cumsum(t):
-    cumsum = t.cumsum(dim = -1)
-    return t - cumsum + cumsum[..., -1:]
-
 def batch_select_indices(t, indices):
     batch, single_index = t.shape[0], indices.ndim == 1
     batch_arange = torch.arange(batch, device = indices.device)
@@ -114,6 +110,8 @@ class QLearner(Module):
 
         self.discount_factor_gamma = discount_factor_gamma
         self.n_step_q_learning = n_step_q_learning
+
+        self.register_buffer('discount_matrix', None, persistent = False)
 
         # online (evaluated) Q model
 
@@ -259,6 +257,17 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred, q_next, q_target)
 
+    def get_discount_matrix(self, timestep):
+        if exists(self.discount_matrix) and self.discount_matrix.shape[-1] <= timestep:
+            return self.discount_matrix[:timestep, :timestep]
+
+        timestep_arange = torch.arange(timestep, device = self.accelerator.device)
+        powers = (timestep_arange[None, :] - timestep_arange[:, None])
+        discount_matrix = torch.triu(self.discount_factor_gamma ** powers)
+
+        self.register_buffer('discount_matrix', discount_matrix, persistent = False)
+        return self.discount_matrix
+
     def n_step_q_learn(
         self,
         instructions: Tuple[str],
@@ -312,12 +321,11 @@ class QLearner(Module):
 
         rewards, _ = pack([rewards, q_next], 'b *')
 
-        powers = torch.arange(num_timesteps + 1, device = device)
-        γ = γ ** powers
+        γ = self.get_discount_matrix(num_timesteps + 1)[:-1, :]
 
-        # Bellman's equation
+        # account for discounting using the discount matrix
 
-        q_target = reverse_cumsum(not_terminal * rewards * γ)[..., :-1]
+        q_target = einsum('b t, r t -> b r', not_terminal * rewards, γ)
 
         # have transformer learn to predict above Q target
 
