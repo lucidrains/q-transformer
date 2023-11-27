@@ -9,7 +9,7 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 from torch.utils.data import Dataset, DataLoader
 
-from einops import rearrange
+from einops import rearrange, repeat, pack, unpack
 from einops.layers.torch import Rearrange
 
 from beartype import beartype
@@ -39,12 +39,28 @@ def exists(val):
 def is_divisible(num, den):
     return (num % den) == 0
 
+def repeat_tuple_el(t: Tuple, i: int) -> Tuple:
+    out = []
+    for el in t:
+        for _ in range(i):
+            out.append(el)
+    return tuple(out)
+def pack_one(t, pattern):
+    return pack([t], pattern)
+
+def unpack_one(t, ps, pattern):
+    return unpack(t, ps, pattern)[0]
+
 def cycle(dl):
     while True:
         for batch in dl:
             yield batch
 
 # tensor helpers
+
+def reverse_cumsum(t):
+    cumsum = t.cumsum(dim = -1)
+    return t - cumsum + cumsum[..., -1:]
 
 def batch_select_indices(t, indices):
     batch, single_index = t.shape[0], indices.ndim == 1
@@ -85,6 +101,7 @@ class QLearner(Module):
             update_after_step = 10,
             update_every = 5
         ),
+        n_step_q_learning = False,
         discount_factor_gamma = 0.99,
         optimizer_kwargs: dict = dict(),
         checkpoint_folder = './checkpoints',
@@ -96,6 +113,7 @@ class QLearner(Module):
         # q-learning related hyperparameters
 
         self.discount_factor_gamma = discount_factor_gamma
+        self.n_step_q_learning = n_step_q_learning
 
         # online (evaluated) Q model
 
@@ -241,6 +259,72 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred, q_next, q_target)
 
+    def n_step_q_learn(
+        self,
+        instructions: Tuple[str],
+        states: Tensor,
+        actions: Tensor,
+        next_states: Tensor,
+        rewards: Tensor,
+        dones: Tensor
+    ) -> Tuple[Tensor, QIntermediates]:
+        """
+        einops
+
+        b - batch
+        c - channels
+        f - frames
+        h - height
+        w - width
+        a - action bins
+        t - timesteps
+        """
+
+        num_timesteps, device = states.shape[1], states.device
+
+        # fold time steps into batch
+
+        states, time_ps = pack_one(states, '* c f h w')
+
+        # repeat instructions per timestep
+
+        repeated_instructions = repeat_tuple_el(instructions, num_timesteps)
+
+        γ = self.discount_factor_gamma
+
+        # anything after the first done flag will be considered terminal
+
+        dones = dones.cumsum(dim = -1) > 0
+        dones = F.pad(dones, (1, 0), value = False)
+
+        not_terminal = (~dones).float()
+
+        # get q predictions
+
+        actions = rearrange(actions, 'b t -> (b t)')
+
+        q_pred = batch_select_indices(self.model(states, repeated_instructions), actions)
+        q_pred = unpack_one(q_pred, time_ps, '*')
+
+        q_next = self.ema_model(next_states, instructions).amax(dim = -1)
+
+        # prepare rewards and discount factors across timesteps
+
+        rewards, _ = pack([rewards, q_next], 'b *')
+
+        powers = torch.arange(num_timesteps + 1, device = device)
+        γ = γ ** powers
+
+        # Bellman's equation
+
+        q_target = reverse_cumsum(not_terminal * rewards * γ)[..., :-1]
+
+        # have transformer learn to predict above Q target
+
+        loss = F.mse_loss(q_pred, q_target)
+
+        return loss, QIntermediates(q_pred, q_next, q_target)
+
     def forward(self):
         step = self.step.item()
 
@@ -258,8 +342,12 @@ class QLearner(Module):
             # main q-learning algorithm
 
             with self.accelerator.autocast():
+                data = next(replay_buffer_iter)
 
-                loss, _ = self.q_learn(*next(replay_buffer_iter))
+                if self.n_step_q_learning:
+                    loss, _ = self.n_step_q_learn(*data)
+                else:
+                    loss, _ = self.q_learn(*data)
 
                 self.accelerator.backward(loss)
 
