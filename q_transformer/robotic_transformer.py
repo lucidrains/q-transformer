@@ -1,4 +1,4 @@
-from functools import cache
+from functools import partial, cache
 
 import torch
 import torch.nn.functional as F
@@ -11,8 +11,6 @@ from beartype.typing import Union, List, Optional, Callable, Tuple, Dict, Any
 
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
-
-from functools import partial
 
 from classifier_free_guidance_pytorch import TextConditioner, AttentionTextConditioner, classifier_free_guidance
 
@@ -42,6 +40,20 @@ def get_is_distributed():
 def MaybeSyncBatchnorm2d(is_distributed = None):
     is_distributed = default(is_distributed, get_is_distributed())
     return nn.SyncBatchNorm if is_distributed else nn.BatchNorm2d
+
+# channel layernorm
+
+class ChanLayerNorm(nn.Module):
+    def __init__(self, dim, eps = 1e-5):
+        super().__init__()
+        self.eps = eps
+        self.gamma = nn.Parameter(torch.ones(dim, 1, 1))
+        self.beta = nn.Parameter(torch.zeros(dim, 1, 1))
+
+    def forward(self, x):
+        var = torch.var(x, dim = 1, unbiased = False, keepdim = True)
+        mean = torch.mean(x, dim = 1, keepdim = True)
+        return (x - mean) * var.clamp(min = self.eps).rsqrt() * self.gamma + self.beta
 
 # sinusoidal positions
 
@@ -87,6 +99,7 @@ class FeedForward(Module):
             nn.Linear(inner_dim, dim),
             nn.Dropout(dropout)
         )
+
     def forward(self, x, cond_fn = None):
         x = self.norm(x)
 
@@ -149,22 +162,27 @@ def MBConv(
     expansion_rate = 4,
     shrinkage_rate = 0.25,
     dropout = 0.,
-    is_distributed = None
+    is_distributed = None,
+    use_layernorm = True
 ):
     hidden_dim = int(expansion_rate * dim_out)
     stride = 2 if downsample else 1
-    batchnorm_klass = MaybeSyncBatchnorm2d(is_distributed)
+
+    if use_layernorm:
+        norm_klass = ChanLayerNorm
+    else:
+        norm_klass = MaybeSyncBatchnorm2d(is_distributed)
 
     net = nn.Sequential(
         nn.Conv2d(dim_in, hidden_dim, 1),
-        batchnorm_klass(hidden_dim),
+        norm_klass(hidden_dim),
         nn.GELU(),
         nn.Conv2d(hidden_dim, hidden_dim, 3, stride = stride, padding = 1, groups = hidden_dim),
-        batchnorm_klass(hidden_dim),
+        norm_klass(hidden_dim),
         nn.GELU(),
         SqueezeExcitation(hidden_dim, shrinkage_rate = shrinkage_rate),
         nn.Conv2d(hidden_dim, dim_out, 1),
-        batchnorm_klass(dim_out)
+        norm_klass(dim_out)
     )
 
     if dim_in == dim_out and not downsample:
@@ -288,6 +306,7 @@ class MaxViT(Module):
         window_size = 7,
         mbconv_expansion_rate = 4,
         mbconv_shrinkage_rate = 0.25,
+        use_layernorm = True,
         dropout = 0.1,
         channels = 3
     ):
@@ -334,7 +353,8 @@ class MaxViT(Module):
                         layer_dim,
                         downsample = is_first,
                         expansion_rate = mbconv_expansion_rate,
-                        shrinkage_rate = mbconv_shrinkage_rate
+                        shrinkage_rate = mbconv_shrinkage_rate,
+                        use_layernorm = use_layernorm
                     ),
                     Rearrange('b d (x w1) (y w2) -> b x y w1 w2 d', w1 = w, w2 = w),  # block-like attention
                     Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w)),
