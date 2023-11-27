@@ -732,6 +732,7 @@ class QRoboticTransformer(Module):
     def get_random_actions(self, batch_size = 1):
         return torch.randint(0, self.action_bins, (batch_size, self.num_actions), device = self.device)
 
+    @torch.no_grad()
     def get_best_actions(
         self,
         *args,
