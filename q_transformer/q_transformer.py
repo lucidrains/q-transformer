@@ -47,13 +47,19 @@ def cycle(dl):
 # tensor helpers
 
 def batch_select_indices(t, indices):
-    batch = t.shape[0]
+    batch, single_index = t.shape[0], indices.ndim == 1
     batch_arange = torch.arange(batch, device = indices.device)
     batch_arange = rearrange(batch_arange, 'b -> b 1')
-    indices = rearrange(indices, 'b -> b 1')
+
+    if single_index:
+        indices = rearrange(indices, 'b -> b 1')
 
     selected = t[batch_arange, indices]
-    return rearrange(selected, 'b 1 -> b')
+
+    if single_index:
+        selected = rearrange(selected, 'b 1 -> b')
+
+    return selected
 
 # Q learning on robotic transformer
 
