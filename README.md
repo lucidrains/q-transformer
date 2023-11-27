@@ -12,11 +12,11 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 
 - [x] first work way towards single action support
 - [x] offer batchnorm-less variant of maxvit, as done in SOTA weather model metnet3
+- [x] add optional deep dueling architecture
 
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [ ] do n-step Q learning, even though not that big of improvement
 - [ ] figure out the conservative regularization, read prior work
-- [ ] add dueling architecture, just to get more RL experience
 - [ ] add double Q + pessimism support
 - [ ] improvise a cross attention variant instead of concatenating previous actions? (could have wrong intuition here)
 - [ ] see if the main idea in this paper is applicable to language models

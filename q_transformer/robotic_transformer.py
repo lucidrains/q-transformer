@@ -564,6 +564,46 @@ class TokenLearner(Module):
         x = unpack_one(x, ps, '* c n')
         return x
 
+# Dueling heads for Q value
+
+class DuelingHead(Module):
+    def __init__(
+        self,
+        dim,
+        expansion_factor = 2,
+        num_actions = 1,
+        action_bins =256
+    ):
+        super().__init__()
+        dim_hidden = dim * expansion_factor
+
+        self.stem = nn.Sequential(
+            nn.Linear(dim, dim_hidden),
+            nn.SiLU()
+        )
+
+        self.to_values = nn.Sequential(
+            nn.Linear(dim_hidden, num_actions),
+            Rearrange('... -> ... 1')
+        )
+
+        self.to_advantages = nn.Sequential(
+            nn.Linear(dim_hidden, num_actions * action_bins),
+            Rearrange('... (a b) -> ... a b', b = action_bins)
+        )
+
+    def forward(self, x):
+        x = self.stem(x)
+
+        advantages = self.to_advantages(x)
+        advantages = advantages - reduce(advantages, '... b -> ... 1', 'mean')
+
+        values = self.to_values(x)
+
+        q_values = values + advantages
+
+        return q_values.sigmoid()
+
 # Robotic Transformer
 
 class QRoboticTransformer(Module):
@@ -585,7 +625,8 @@ class QRoboticTransformer(Module):
         use_attn_conditioner = False,
         conditioner_kwargs: dict = dict(),
         concat_action_embeddings = False,      # will allow for action embeddings to be concatted just before attention layers - https://arxiv.org/abs/2309.10150 figure 3.
-        action_dim = 16                        # dimension of action embedding, defaults to embedding dimension of maxvit
+        action_dim = 16,                       # dimension of action embedding, defaults to embedding dimension of maxvit
+        dueling = False,                       # https://arxiv.org/abs/1511.06581
     ):
         super().__init__()
 
@@ -648,12 +689,19 @@ class QRoboticTransformer(Module):
 
         self.cond_drop_prob = cond_drop_prob
 
-        self.to_q_values = nn.Sequential(
-            LayerNorm(attend_dim),
-            nn.Linear(attend_dim, num_actions * action_bins),
-            Rearrange('... (a b) -> ... a b', b = action_bins),
-            nn.Sigmoid()
-        )
+        if dueling:
+            self.to_q_values = DuelingHead(
+                attend_dim,
+                num_actions = num_actions,
+                action_bins = action_bins
+            )
+        else:
+            self.to_q_values = nn.Sequential(
+                LayerNorm(attend_dim),
+                nn.Linear(attend_dim, num_actions * action_bins),
+                Rearrange('... (a b) -> ... a b', b = action_bins),
+                nn.Sigmoid()
+            )
 
     @property
     def device(self):
