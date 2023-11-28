@@ -44,6 +44,9 @@ Losses = namedtuple('Losses', [
 def exists(val):
     return val is not None
 
+def default(val, d):
+    return val if exists(val) else d
+
 def is_divisible(num, den):
     return (num % den) == 0
 
@@ -266,7 +269,6 @@ class QLearner(Module):
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-
         q_next = q_next.clamp(min = default(monte_carlo_return, 1e4))
 
         # Bellman's equation. most important line of code, hopefully done correctly
@@ -277,10 +279,10 @@ class QLearner(Module):
 
         loss = F.mse_loss(q_pred, q_target)
 
-        # that's it. 4 loc for the heart of q-learning
+        # that's it. ~5 loc for the heart of q-learning
         # return loss and some of the intermediates for logging
 
-        return loss, QIntermediates(q_pred, q_next, q_target)
+        return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
     def n_step_q_learn(
         self,
