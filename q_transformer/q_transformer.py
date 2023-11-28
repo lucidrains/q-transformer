@@ -28,9 +28,15 @@ from ema_pytorch import EMA
 # constants
 
 QIntermediates = namedtuple('QIntermediates', [
+    'q_pred_all_actions',
     'q_pred',
     'q_next',
     'q_target'
+])
+
+Losses = namedtuple('Losses', [
+    'td_loss',
+    'conservative_reg_loss'
 ])
 
 # helpers
@@ -89,12 +95,13 @@ class QLearner(Module):
             shuffle = True
         ),
         q_target_ema_kwargs: dict = dict(
-            beta = 0.999,
+            beta = 0.99,
             update_after_step = 10,
             update_every = 5
         ),
         n_step_q_learning = False,
-        discount_factor_gamma = 0.99,
+        discount_factor_gamma = 0.98,
+        conservative_reg_loss_weight = 1., # they claim 1. is best in paper
         optimizer_kwargs: dict = dict(),
         checkpoint_folder = './checkpoints',
         checkpoint_every = 1000,
@@ -106,6 +113,7 @@ class QLearner(Module):
 
         self.discount_factor_gamma = discount_factor_gamma
         self.n_step_q_learning = n_step_q_learning
+        self.conservative_reg_loss_weight = conservative_reg_loss_weight
 
         self.register_buffer('discount_matrix', None, persistent = False)
 
@@ -243,7 +251,8 @@ class QLearner(Module):
         # first make a prediction with online q robotic transformer
         # select out the q-values for the action that was taken
 
-        q_pred = batch_select_indices(self.model(states, instructions), actions)
+        q_pred_all_actions = self.model(states, instructions)
+        q_pred = batch_select_indices(q_pred_all_actions, actions)
 
         # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
@@ -281,6 +290,7 @@ class QLearner(Module):
         h - height
         w - width
         t - timesteps
+        a - action bins
         q - q values
         """
 
@@ -307,7 +317,8 @@ class QLearner(Module):
 
         actions = rearrange(actions, 'b t -> (b t)')
 
-        q_pred = batch_select_indices(self.model(states, repeated_instructions), actions)
+        q_pred_all_actions = self.model(states, repeated_instructions)
+        q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '*')
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
@@ -326,7 +337,50 @@ class QLearner(Module):
 
         loss = F.mse_loss(q_pred, q_target)
 
-        return loss, QIntermediates(q_pred, q_next, q_target)
+        # prepare q prediction
+
+        q_pred_all_actions = unpack_one(q_pred_all_actions, time_ps, '* a')
+
+        return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
+
+    def learn(
+        self,
+        *args
+    ):
+        _, _, actions, *_ = args
+
+        # main q-learning loss, whether single or n-step
+
+        if self.n_step_q_learning:
+            td_loss, q_intermediates = self.n_step_q_learn(*args)
+        else:
+            td_loss, q_intermediates = self.q_learn(*args)
+
+        # calculate conservative regularization
+
+        batch = actions.shape[0]
+
+        q_preds = q_intermediates.q_pred_all_actions
+        num_action_bins = q_preds.shape[-1]
+        num_non_dataset_actions = num_action_bins - 1
+
+        actions = rearrange(actions, '... -> ... 1')
+
+        dataset_action_mask = torch.zeros_like(q_preds).scatter_(-1, actions, torch.ones_like(q_preds))
+
+        q_actions_not_taken = q_preds[~dataset_action_mask.bool()]
+        q_actions_not_taken = rearrange(q_actions_not_taken, '(b t a) -> b t a', b = batch, a = num_non_dataset_actions)
+
+        conservative_reg_loss = (q_actions_not_taken ** 2).sum() / num_non_dataset_actions
+
+        # total loss
+
+        loss =  0.5 * td_loss + \
+                0.5 * conservative_reg_loss * self.conservative_reg_loss_weight
+
+        loss_breakdown = Losses(td_loss, conservative_reg_loss)
+
+        return loss, loss_breakdown
 
     def forward(self):
         step = self.step.item()
@@ -345,16 +399,12 @@ class QLearner(Module):
             # main q-learning algorithm
 
             with self.accelerator.autocast():
-                data = next(replay_buffer_iter)
 
-                if self.n_step_q_learning:
-                    loss, _ = self.n_step_q_learn(*data)
-                else:
-                    loss, _ = self.q_learn(*data)
+                loss, (td_loss, conservative_reg_loss) = self.learn(*next(replay_buffer_iter))
 
                 self.accelerator.backward(loss)
 
-            self.print(f'loss: {loss.item():.3f}')
+            self.print(f'td loss: {td_loss.item():.3f}')
 
             # take optimizer step
 
