@@ -9,6 +9,8 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 from torch.utils.data import Dataset, DataLoader
 
+from torchtyping import TensorType
+
 from einops import rearrange, repeat, pack, unpack
 from einops.layers.torch import Rearrange
 
@@ -232,14 +234,13 @@ class QLearner(Module):
 
     def q_learn(
         self,
-        instructions: Tuple[str],
-        states: Tensor,
-        actions: Tensor,
-        next_states: Tensor,
-        reward: Tensor,
-        done: Tensor
+        instructions:   Tuple[str],
+        states:         TensorType['b', 'c', 'f', 'h', 'w', float],
+        actions:        TensorType['b', int],
+        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
+        reward:         TensorType['b', float],
+        done:           TensorType['b', bool]
     ) -> Tuple[Tensor, QIntermediates]:
-
         # 'next' stands for the very next time step (whether state, q, actions etc)
 
         γ = self.discount_factor_gamma
@@ -270,12 +271,12 @@ class QLearner(Module):
 
     def n_step_q_learn(
         self,
-        instructions: Tuple[str],
-        states: Tensor,
-        actions: Tensor,
-        next_states: Tensor,
-        rewards: Tensor,
-        dones: Tensor
+        instructions:   Tuple[str],
+        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
+        actions:        TensorType['b', 't', int],
+        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
+        rewards:        TensorType['b', 't', float],
+        dones:          TensorType['b', 't', bool]
     ) -> Tuple[Tensor, QIntermediates]:
         """
         einops
@@ -285,8 +286,8 @@ class QLearner(Module):
         f - frames
         h - height
         w - width
-        a - action bins
         t - timesteps
+        q - q values
         """
 
         num_timesteps, device = states.shape[1], states.device
