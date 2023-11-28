@@ -811,5 +811,4 @@ class QRoboticTransformer(Module):
         if self.num_actions == 1:
             q_values = rearrange(q_values, '... 1 b -> ... b')
 
-        exit()
         return q_values
