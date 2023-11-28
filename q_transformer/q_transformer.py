@@ -88,6 +88,8 @@ class QLearner(Module):
         batch_size: int,
         num_train_steps: int,
         learning_rate: float,
+        min_reward: float = 0.,
+        monte_carlo_return: Optional[float] = None,
         weight_decay: float = 0.,
         accelerator: Optional[Accelerator] = None,
         accelerator_kwargs: dict = dict(),
@@ -140,6 +142,9 @@ class QLearner(Module):
             accelerator = Accelerator(**accelerator_kwargs)
 
         self.accelerator = accelerator
+
+        self.min_reward = min_reward
+        self.monte_carlo_return = monte_carlo_return
 
         self.dataloader = DataLoader(
             dataset,
@@ -356,7 +361,7 @@ class QLearner(Module):
     def learn(
         self,
         *args,
-        min_reward: float = 0.,
+        min_reward: Optional[float] = None,
         monte_carlo_return: Optional[float] = None
     ):
         _, _, actions, *_ = args
@@ -407,8 +412,11 @@ class QLearner(Module):
         self,
         *,
         monte_carlo_return: Optional[float] = None,
-        min_reward: float = 0.
+        min_reward: Optional[float] = None
     ):
+        monte_carlo_return = default(monte_carlo_return, self.monte_carlo_return)
+        min_reward = default(min_reward, self.min_reward)
+
         step = self.step.item()
 
         replay_buffer_iter = cycle(self.dataloader)
