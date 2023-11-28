@@ -17,7 +17,6 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 - [x] build the conservative regularization
 
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
-- [ ] add double Q + pessimism support
 - [ ] improvise a cross attention variant instead of concatenating previous actions? (could have wrong intuition here)
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
