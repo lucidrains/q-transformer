@@ -16,6 +16,7 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 - [x] add n-step Q learning
 - [x] build the conservative regularization
 
+- [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [ ] improvise a cross attention variant instead of concatenating previous actions? (could have wrong intuition here)
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>
