@@ -47,6 +47,7 @@ def repeat_tuple_el(t: Tuple, i: int) -> Tuple:
         for _ in range(i):
             out.append(el)
     return tuple(out)
+
 def pack_one(t, pattern):
     return pack([t], pattern)
 
@@ -61,19 +62,12 @@ def cycle(dl):
 # tensor helpers
 
 def batch_select_indices(t, indices):
-    batch, single_index = t.shape[0], indices.ndim == 1
+    batch = t.shape[0]
     batch_arange = torch.arange(batch, device = indices.device)
     batch_arange = rearrange(batch_arange, 'b -> b 1')
-
-    if single_index:
-        indices = rearrange(indices, 'b -> b 1')
-
+    indices = rearrange(indices, 'b -> b 1')
     selected = t[batch_arange, indices]
-
-    if single_index:
-        selected = rearrange(selected, 'b 1 -> b')
-
-    return selected
+    return rearrange(selected, 'b 1 -> b')
 
 # Q learning on robotic transformer
 
