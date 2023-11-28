@@ -357,6 +357,7 @@ class QLearner(Module):
             td_loss, q_intermediates = self.q_learn(*args)
 
         # calculate conservative regularization
+        # section 4.2 in paper, eq 2
 
         batch = actions.shape[0]
 
