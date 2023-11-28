@@ -12,6 +12,8 @@ from beartype.typing import Union, List, Optional, Callable, Tuple, Dict, Any
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
 
+from q_transformer.attend import Attend
+
 from classifier_free_guidance_pytorch import TextConditioner, AttentionTextConditioner, classifier_free_guidance
 
 # helpers
@@ -414,18 +416,16 @@ class TransformerAttention(Module):
     def __init__(
         self,
         dim,
-        causal = False,
         dim_head = 64,
         dim_context = None,
         heads = 8,
         num_mem_kv = 4,
         norm_context = False,
-        dropout = 0.1
+        dropout = 0.1,
+        flash = True
     ):
         super().__init__()
         self.heads = heads
-        self.scale = dim_head ** -0.5
-        self.causal = causal
         inner_dim = dim_head * heads
 
         dim_context = default(dim_context, dim)
@@ -436,12 +436,17 @@ class TransformerAttention(Module):
         self.attn_dropout = nn.Dropout(dropout)
 
         self.to_q = nn.Linear(dim, inner_dim, bias = False)
-        self.to_kv = nn.Linear(dim_context, dim_head * 2, bias = False)
+        self.to_kv = nn.Linear(dim_context, inner_dim * 2, bias = False)
 
         self.num_mem_kv = num_mem_kv
         self.mem_kv = None
         if num_mem_kv > 0:
-            self.mem_kv = nn.Parameter(torch.randn(2, num_mem_kv, dim_head))
+            self.mem_kv = nn.Parameter(torch.randn(2, heads, num_mem_kv, dim_head))
+
+        self.attend = Attend(
+            dropout = dropout,
+            flash = flash
+        )
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim, bias = False),
@@ -453,7 +458,6 @@ class TransformerAttention(Module):
         x,
         context = None,
         mask = None,
-        attn_bias = None,
         attn_mask = None,
         cond_fn: Optional[Callable] = None
     ):
@@ -472,9 +476,7 @@ class TransformerAttention(Module):
 
         q, k, v = self.to_q(x), *self.to_kv(kv_input).chunk(2, dim = -1)
 
-        q = rearrange(q, 'b n (h d) -> b h n d', h = self.heads)
-
-        q = q * self.scale
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), (q, k, v))
 
         if exists(self.mem_kv):
             mk, mv = map(lambda t: repeat(t, '... -> b ...', b = b), self.mem_kv)
@@ -482,36 +484,13 @@ class TransformerAttention(Module):
             k = torch.cat((mk, k), dim = -2)
             v = torch.cat((mv, v), dim = -2)
 
-            if exists(attn_bias) and self.num_mem_kv > 0:
-                attn_bias = F.pad(attn_bias, (self.num_mem_kv, 0), value = 0.)
-
             if exists(mask):
                 mask = F.pad(mask, (self.num_mem_kv, 0), value = True)
 
             if exists(attn_mask):
                 attn_mask = F.pad(attn_mask, (self.num_mem_kv, 0), value = True)
 
-        sim = einsum('b h i d, b j d -> b h i j', q, k)
-
-        if exists(attn_bias):
-            sim = sim + attn_bias
-
-        if exists(attn_mask):
-            sim = sim.masked_fill(~attn_mask, -torch.finfo(sim.dtype).max)
-
-        if exists(mask):
-            mask = rearrange(mask, 'b j -> b 1 1 j')
-            sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)
-
-        if self.causal:
-            i, j = sim.shape[-2:]
-            causal_mask = torch.ones((i, j), dtype = torch.bool, device = x.device).triu(j - i + 1)
-            sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)
-
-        attn = sim.softmax(dim = -1)
-        attn = self.attn_dropout(attn)
-
-        out = einsum('b h i j, b j d -> b h i d', attn, v)
+        out = self.attend(q, k, v, mask = mask, attn_mask = attn_mask)
 
         out = rearrange(out, 'b h n d -> b n (h d)')
         return self.to_out(out)
@@ -525,13 +504,14 @@ class Transformer(Module):
         heads = 8,
         depth = 6,
         attn_dropout = 0.,
-        ff_dropout = 0.
+        ff_dropout = 0.,
+        flash_attn = True
     ):
         super().__init__()
         self.layers = ModuleList([])
         for _ in range(depth):
             self.layers.append(ModuleList([
-                TransformerAttention(dim = dim, heads =  heads, dropout = attn_dropout),
+                TransformerAttention(dim = dim, heads =  heads, dropout = attn_dropout, flash = flash_attn),
                 FeedForward(dim = dim, dropout = ff_dropout)
             ]))
 
@@ -649,6 +629,7 @@ class QRoboticTransformer(Module):
         concat_action_embeddings = False,      # will allow for action embeddings to be concatted just before attention layers - https://arxiv.org/abs/2309.10150 figure 3.
         action_dim = 16,                       # dimension of action embedding, defaults to embedding dimension of maxvit
         dueling = False,                       # https://arxiv.org/abs/1511.06581
+        flash_attn = True
     ):
         super().__init__()
 
@@ -706,7 +687,8 @@ class QRoboticTransformer(Module):
             dim = attend_dim,
             dim_head = dim_head,
             heads = heads,
-            depth = depth
+            depth = depth,
+            flash_attn = flash_attn
         )
 
         self.cond_drop_prob = cond_drop_prob
@@ -829,4 +811,5 @@ class QRoboticTransformer(Module):
         if self.num_actions == 1:
             q_values = rearrange(q_values, '... 1 b -> ... b')
 
+        exit()
         return q_values
