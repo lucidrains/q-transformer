@@ -495,7 +495,6 @@ class TransformerAttention(Module):
         out = rearrange(out, 'b h n d -> b n (h d)')
         return self.to_out(out)
 
-@beartype
 class Transformer(Module):
     def __init__(
         self,
@@ -515,6 +514,7 @@ class Transformer(Module):
                 FeedForward(dim = dim, dropout = ff_dropout)
             ]))
 
+    @beartype
     def forward(
         self,
         x,
@@ -526,6 +526,7 @@ class Transformer(Module):
         for attn, ff in self.layers:
              x = attn(x, attn_mask = attn_mask, cond_fn = next(cond_fns, None)) + x
              x = ff(x, cond_fn = next(cond_fns, None)) + x
+
         return x
 
 # token learner module
