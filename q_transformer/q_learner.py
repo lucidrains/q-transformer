@@ -17,7 +17,7 @@ from einops.layers.torch import Rearrange
 from beartype import beartype
 from beartype.typing import Optional, Union, List, Tuple
 
-from q_transformer.robotic_transformer import QRoboticTransformer
+from q_transformer.q_robotic_transformer import QRoboticTransformer
 
 from q_transformer.optimizer import get_adam_optimizer
 
