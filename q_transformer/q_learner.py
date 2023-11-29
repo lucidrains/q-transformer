@@ -71,12 +71,9 @@ def cycle(dl):
 # tensor helpers
 
 def batch_select_indices(t, indices):
-    batch = t.shape[0]
-    batch_arange = torch.arange(batch, device = indices.device)
-    batch_arange = rearrange(batch_arange, 'b -> b 1')
-    indices = rearrange(indices, 'b -> b 1')
-    selected = t[batch_arange, indices]
-    return rearrange(selected, 'b 1 -> b')
+    indices = rearrange(indices, '... -> ... 1')
+    selected = t.gather(-1, indices)
+    return rearrange(selected, '... 1 -> ...')
 
 # Q learning on robotic transformer
 
@@ -416,13 +413,7 @@ class QLearner(Module):
         # unpack back to (b, t, n)
 
         q_pred_all_actions = self.model(states, repeated_instructions, actions = actions)
-
-        q_pred_all_actions, btn_ps = pack_one(q_pred_all_actions, '* a')
-        flattened_actions, _ = pack_one(actions, '*')
-
-        q_pred = batch_select_indices(q_pred_all_actions, flattened_actions)
-
-        q_pred = unpack_one(q_pred, btn_ps, '*')
+        q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '* n')
 
         # get q_next
@@ -498,6 +489,7 @@ class QLearner(Module):
         batch = actions.shape[0]
 
         q_preds = q_intermediates.q_pred_all_actions
+        q_preds = rearrange(q_preds, '... a -> (...) a')
 
         num_action_bins = q_preds.shape[-1]
         num_non_dataset_actions = num_action_bins - 1
