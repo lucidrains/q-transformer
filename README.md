@@ -17,11 +17,9 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [x] add optional deep dueling architecture
 - [x] add n-step Q learning
 - [x] build the conservative regularization
-
+- [x] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [x] improvise decoder head variant, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
     - [ ] allow for cross attention to fine frame / learned tokens
-
-- [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 
 - [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>

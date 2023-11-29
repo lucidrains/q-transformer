@@ -60,7 +60,7 @@ class MockReplayNStepDataset(Dataset):
 
         instruction = "please clean the kitchen"
         state = torch.randn(*self.time_shape, 3, *self.video_shape)
-        action = torch.randint(0, self.num_action_bins + 1, (*action_dims, *self.time_shape))
+        action = torch.randint(0, self.num_action_bins + 1, (*self.time_shape, *action_dims))
         next_state = torch.randn(3, *self.video_shape)
         reward = torch.randint(0, 2, self.time_shape)
         done = torch.zeros(self.time_shape, dtype = torch.bool)

@@ -252,7 +252,7 @@ class QLearner(Module):
         reward:         TensorType['b', float],
         done:           TensorType['b', bool],
         *,
-        monte_carlo_return = -1e4
+        monte_carlo_return = None
 
     ) -> Tuple[Tensor, QIntermediates]:
         # 'next' stands for the very next time step (whether state, q, actions etc)
@@ -270,7 +270,7 @@ class QLearner(Module):
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-        q_next = q_next.clamp(min = monte_carlo_return)
+        q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
         # Bellman's equation. most important line of code, hopefully done correctly
 
@@ -294,7 +294,7 @@ class QLearner(Module):
         rewards:        TensorType['b', 't', float],
         dones:          TensorType['b', 't', bool],
         *,
-        monte_carlo_return = -1e4
+        monte_carlo_return = None
 
     ) -> Tuple[Tensor, QIntermediates]:
         """
@@ -338,7 +338,7 @@ class QLearner(Module):
         q_pred = unpack_one(q_pred, time_ps, '*')
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-        q_next = q_next.clamp(min = monte_carlo_return)
+        q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
         # prepare rewards and discount factors across timesteps
 
@@ -369,7 +369,7 @@ class QLearner(Module):
         rewards:        TensorType['b', 't', float],
         dones:          TensorType['b', 't', bool],
         *,
-        monte_carlo_return = -1e4
+        monte_carlo_return = None
 
     ) -> Tuple[Tensor, QIntermediates]:
         """
@@ -385,20 +385,84 @@ class QLearner(Module):
         a - action bins
         q - q values
         """
-
+        monte_carlo_return = default(monte_carlo_return, -1e4)
         num_timesteps, device = states.shape[1], states.device
 
         # fold time steps into batch
 
         states, time_ps = pack_one(states, '* c f h w')
+        actions, _ = pack_one(actions, '* n')
 
         # repeat instructions per timestep
 
         repeated_instructions = repeat_tuple_el(instructions, num_timesteps)
 
+        # anything after the first done flag will be considered terminal
+
+        dones = dones.cumsum(dim = -1) > 0
+        dones = F.pad(dones, (1, -1), value = False)
+
+        not_terminal = (~dones).float()
+
+        # rewards should not be given on and after terminal step
+
+        rewards = rewards * not_terminal
+
+        # because greek unicode is nice to look at
+
         γ = self.discount_factor_gamma
 
-        raise NotImplementedError
+        # get predicted Q for each action
+        # unpack back to (b, t, n)
+
+        q_pred_all_actions = self.model(states, repeated_instructions, actions = actions)
+
+        q_pred_all_actions, btn_ps = pack_one(q_pred_all_actions, '* a')
+        flattened_actions, _ = pack_one(actions, '*')
+
+        q_pred = batch_select_indices(q_pred_all_actions, flattened_actions)
+
+        q_pred = unpack_one(q_pred, btn_ps, '*')
+        q_pred = unpack_one(q_pred, time_ps, '* n')
+
+        # get q_next
+
+        q_next = self.ema_model(next_states, instructions)
+        q_next = q_next.max(dim = -1).values
+        q_next.clamp_(min = monte_carlo_return)
+
+        # get target Q
+        # unpack back to - (b, t, n)
+
+        q_target_all_actions = self.ema_model(states, repeated_instructions, actions = actions)
+        q_target = q_target_all_actions.max(dim = -1).values
+
+        q_target.clamp_(min = monte_carlo_return)
+        q_target = unpack_one(q_target, time_ps, '* n')
+
+        # main contribution of the paper is the following logic
+        # section 4.1 - eq. 1
+
+        # first take care of the loss for all actions except for the very last one
+
+        q_pred_rest_actions, q_pred_last_action      = q_pred[..., :-1], q_pred[..., -1]
+        q_target_first_action, q_target_rest_actions = q_target[..., 0], q_target[..., 1:]
+
+        losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions, q_target_rest_actions, reduction = 'none')
+
+        # next take care of the very last action, which incorporates the rewards
+
+        q_target_last_action, _ = pack([q_target_first_action[..., 1:], q_next], 'b *')
+
+        q_target_last_action = rewards + γ * q_target_last_action
+
+        losses_last_action = F.mse_loss(q_pred_last_action, q_target_last_action, reduction = 'none')
+
+        # flatten and average
+
+        losses, _ = pack([losses_all_actions_but_last, losses_last_action], '*')
+
+        return losses.mean(), QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
     def learn(
         self,
@@ -434,10 +498,11 @@ class QLearner(Module):
         batch = actions.shape[0]
 
         q_preds = q_intermediates.q_pred_all_actions
+
         num_action_bins = q_preds.shape[-1]
         num_non_dataset_actions = num_action_bins - 1
 
-        actions = rearrange(actions, '... -> ... 1')
+        actions = rearrange(actions, '... -> (...) 1')
 
         dataset_action_mask = torch.zeros_like(q_preds).scatter_(-1, actions, torch.ones_like(q_preds))
 
