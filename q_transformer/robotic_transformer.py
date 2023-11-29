@@ -79,20 +79,11 @@ class Residual(Module):
     def forward(self, x):
         return self.fn(x) + x
 
-class LayerNorm(Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.gamma = nn.Parameter(torch.ones(dim))
-        self.register_buffer("beta", torch.zeros(dim))
-
-    def forward(self, x):
-        return F.layer_norm(x, x.shape[-1:], self.gamma, self.beta)
-
 class FeedForward(Module):
     def __init__(self, dim, mult = 4, dropout = 0.):
         super().__init__()
         inner_dim = int(dim * mult)
-        self.norm = LayerNorm(dim)
+        self.norm = nn.LayerNorm(dim, elementwise_affine = False)
 
         self.net = nn.Sequential(
             nn.Linear(dim, inner_dim),
@@ -206,7 +197,7 @@ class Attention(Module):
         super().__init__()
         assert (dim % dim_head) == 0, 'dimension should be divisible by dimension per head'
 
-        self.norm = LayerNorm(dim)
+        self.norm = nn.LayerNorm(dim)
 
         self.heads = dim // dim_head
         self.scale = dim_head ** -0.5
@@ -380,7 +371,7 @@ class MaxViT(Module):
 
         self.mlp_head = nn.Sequential(
             Reduce('b d h w -> b d', 'mean'),
-            LayerNorm(embed_dim),
+            nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, num_classes)
         )
 
@@ -430,8 +421,8 @@ class TransformerAttention(Module):
 
         dim_context = default(dim_context, dim)
 
-        self.norm = LayerNorm(dim)
-        self.context_norm = LayerNorm(dim_context) if norm_context else nn.Identity()
+        self.norm = nn.LayerNorm(dim, elementwise_affine = False)
+        self.context_norm = nn.LayerNorm(dim_context) if norm_context else nn.Identity()
 
         self.attn_dropout = nn.Dropout(dropout)
 
@@ -574,7 +565,6 @@ class DuelingHead(Module):
         self,
         dim,
         expansion_factor = 2,
-        num_actions = 1,
         action_bins =256
     ):
         super().__init__()
@@ -586,25 +576,22 @@ class DuelingHead(Module):
         )
 
         self.to_values = nn.Sequential(
-            nn.Linear(dim_hidden, num_actions),
-            Rearrange('... -> ... 1')
+            nn.Linear(dim_hidden, 1)
         )
 
         self.to_advantages = nn.Sequential(
-            nn.Linear(dim_hidden, num_actions * action_bins),
-            Rearrange('... (a b) -> ... a b', b = action_bins)
+            nn.Linear(dim_hidden, action_bins)
         )
 
     def forward(self, x):
         x = self.stem(x)
 
         advantages = self.to_advantages(x)
-        advantages = advantages - reduce(advantages, '... b -> ... 1', 'mean')
+        advantages = advantages - reduce(advantages, '... a -> ... 1', 'mean')
 
         values = self.to_values(x)
 
         q_values = values + advantages
-
         return q_values.sigmoid()
 
 # Robotic Transformer
@@ -616,7 +603,6 @@ class QRoboticTransformer(Module):
         self,
         *,
         vit: Union[Dict[str, Any], MaxViT],
-        num_actions = 11,
         action_bins = 256,
         depth = 6,
         heads = 8,
@@ -645,22 +631,9 @@ class QRoboticTransformer(Module):
 
         attend_dim = vit.embed_dim
 
-        # q-transformer related action embeddings
+        # q-transformer related action embeddings - redo
 
-        self.num_actions = num_actions
         self.action_bins = action_bins
-        self.register_buffer('action_bin_offset', action_bins * torch.arange(num_actions), persistent = False)
-
-        action_dim = default(action_dim, vit.embed_dim)
-
-        self.concat_action_embeddings = concat_action_embeddings
-
-        if concat_action_embeddings:
-            all_action_bins = num_actions * action_bins
-            self.action_bin_embeddings = nn.Embedding(all_action_bins + 1, action_dim)
-            self.null_action_bin_id = all_action_bins
-
-            attend_dim = vit.embed_dim + action_dim * num_actions
 
         # conditioning
 
@@ -697,14 +670,12 @@ class QRoboticTransformer(Module):
         if dueling:
             self.to_q_values = DuelingHead(
                 attend_dim,
-                num_actions = num_actions,
                 action_bins = action_bins
             )
         else:
             self.to_q_values = nn.Sequential(
                 LayerNorm(attend_dim),
-                nn.Linear(attend_dim, num_actions * action_bins),
-                Rearrange('... (a b) -> ... a b', b = action_bins),
+                nn.Linear(attend_dim, action_bins),
                 nn.Sigmoid()
             )
 
@@ -713,7 +684,7 @@ class QRoboticTransformer(Module):
         return next(self.parameters()).device
 
     def get_random_actions(self, batch_size = 1):
-        return torch.randint(0, self.action_bins, (batch_size, self.num_actions), device = self.device)
+        return torch.randint(0, self.action_bins, (batch_size,), device = self.device)
 
     @torch.no_grad()
     def get_best_actions(
@@ -739,6 +710,16 @@ class QRoboticTransformer(Module):
         actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
     ):
+        """
+        einops
+        b - batch
+        c - channels
+        f - frames
+        h - height
+        w - width
+        n - number of learned tokens
+        """
+
         if exists(texts) and isinstance(texts, tuple):
             texts = list(texts)
 
@@ -788,10 +769,7 @@ class QRoboticTransformer(Module):
         attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = ~attn_mask)
 
         pooled = reduce(attended_tokens, 'b (f n) d -> b d', 'mean', f = frames)
-
         q_values = self.to_q_values(pooled)
-
-        if self.num_actions == 1:
-            q_values = rearrange(q_values, '... 1 b -> ... b')
+        q_values = rearrange(q_values, '... a -> ... a')
 
         return q_values

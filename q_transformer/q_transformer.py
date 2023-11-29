@@ -112,7 +112,6 @@ class QLearner(Module):
         checkpoint_every = 1000,
     ):
         super().__init__()
-        assert model.num_actions == 1
 
         # q-learning related hyperparameters
 
@@ -269,7 +268,7 @@ class QLearner(Module):
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-        q_next = q_next.clamp(min = default(monte_carlo_return, 1e4))
+        q_next = q_next.clamp(min = default(monte_carlo_return, -1e4))
 
         # Bellman's equation. most important line of code, hopefully done correctly
 
@@ -337,8 +336,7 @@ class QLearner(Module):
         q_pred = unpack_one(q_pred, time_ps, '*')
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-
-        q_next = q_next.clamp(min = default(monte_carlo_return, 1e4))
+        q_next = q_next.clamp(min = default(monte_carlo_return, -1e4))
 
         # prepare rewards and discount factors across timesteps
 
@@ -442,7 +440,7 @@ class QLearner(Module):
                     monte_carlo_return = monte_carlo_return
                 )
 
-                self.accelerator.backward(loss)
+                # self.accelerator.backward(loss)
 
             self.print(f'td loss: {td_loss.item():.3f}')
 
