@@ -16,11 +16,6 @@ from q_transformer.attend import Attend
 
 from classifier_free_guidance_pytorch import TextConditioner, AttentionTextConditioner, classifier_free_guidance
 
-from x_transformers import (
-    Decoder,
-    AutoregressiveWrapper
-)
-
 # helpers
 
 def exists(val):
@@ -599,6 +594,57 @@ class DuelingHead(Module):
         q_values = values + advantages
         return q_values.sigmoid()
 
+# Action Transformer Decoder Head Modules
+
+class SingleActionHead(Module):
+    def __init__(
+        self,
+        dim,
+        *,
+        num_learned_tokens = 8,
+        action_bins = 256,
+        dueling = False
+    ):
+        super().__init__()
+        self.action_bins = action_bins
+
+        if dueling:
+            self.to_q_values = nn.Sequential(
+                Reduce('b (f n) d -> b d', 'mean', n = num_learned_tokens),
+                DuelingHead(
+                    dim,
+                    action_bins = action_bins
+                )
+            )
+        else:
+            self.to_q_values = nn.Sequential(
+                Reduce('b (f n) d -> b d', 'mean', n = num_learned_tokens),
+                nn.LayerNorm(dim),
+                nn.Linear(dim, action_bins),
+                nn.Sigmoid()
+            )
+
+    def get_random_actions(self, batch_size):
+        return torch.randint(0, self.action_bins, (batch_size,), device = self.device)
+
+    def get_best_actions(
+        self,
+        encoded_state,
+        return_q_values = False,
+        **kwargs
+    ):
+        q_values = self.forward(encoded_state)
+
+        max_q, action_indices = q_values.max(dim = -1)
+
+        if not return_q_values:
+            return action_indices
+
+        return action_indices, max_q
+
+    def forward(self, x):
+        return self.to_q_values(x)
+
 # Robotic Transformer
 
 class QRoboticTransformer(Module):
@@ -671,28 +717,19 @@ class QRoboticTransformer(Module):
 
         self.cond_drop_prob = cond_drop_prob
 
-        if dueling:
-            self.to_q_values = nn.Sequential(
-                Reduce('b (f n) d -> b d', 'mean', n = self.num_learned_tokens),
-                DuelingHead(
-                    attend_dim,
-                    action_bins = action_bins
-                )
-            )
-        else:
-            self.to_q_values = nn.Sequential(
-                Reduce('b (f n) d -> b d', 'mean', n = self.num_learned_tokens),
-                LayerNorm(attend_dim),
-                nn.Linear(attend_dim, action_bins),
-                nn.Sigmoid()
-            )
+        self.action_head = SingleActionHead(
+            attend_dim,
+            num_learned_tokens = self.num_learned_tokens,
+            action_bins = action_bins,
+            dueling = dueling
+        )
 
     @property
     def device(self):
         return next(self.parameters()).device
 
     def get_random_actions(self, batch_size = 1):
-        return torch.randint(0, self.action_bins, (batch_size,), device = self.device)
+        return self.action_head.get_random_actions(batch_size)
 
     @torch.no_grad()
     def get_best_actions(
@@ -701,14 +738,8 @@ class QRoboticTransformer(Module):
         return_q_values = False,
         **kwargs
     ):
-        q_values = self.forward(*args, **kwargs)
-
-        max_q, action_indices = q_values.max(dim = -1)
-
-        if not return_q_values:
-            return action_indices
-
-        return action_indices, max_q
+        encoded_state = self.encode_state(*args, **kwargs)
+        return self.action_head.get_best_actions(encoded_state, return_q_values = return_q_values)
 
     def encode_state(
         self,
@@ -793,8 +824,9 @@ class QRoboticTransformer(Module):
             cond_drop_prob = cond_drop_prob
         )
 
-        # single actions
+        # head that returns the q values
+        # supporting both single and multiple actions
 
-        q_values = self.to_q_values(encoded_state)
+        q_values = self.action_head(encoded_state)
 
         return q_values
