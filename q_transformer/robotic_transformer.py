@@ -667,12 +667,16 @@ class QRoboticTransformer(Module):
         self.cond_drop_prob = cond_drop_prob
 
         if dueling:
-            self.to_q_values = DuelingHead(
-                attend_dim,
-                action_bins = action_bins
+            self.to_q_values = nn.Sequential(
+                Reduce('b (f n) d -> b d', 'mean', n = self.num_learned_tokens),
+                DuelingHead(
+                    attend_dim,
+                    action_bins = action_bins
+                )
             )
         else:
             self.to_q_values = nn.Sequential(
+                Reduce('b (f n) d -> b d', 'mean', n = self.num_learned_tokens),
                 LayerNorm(attend_dim),
                 nn.Linear(attend_dim, action_bins),
                 nn.Sigmoid()
@@ -767,8 +771,8 @@ class QRoboticTransformer(Module):
 
         attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = ~attn_mask)
 
-        pooled = reduce(attended_tokens, 'b (f n) d -> b d', 'mean', f = frames)
-        q_values = self.to_q_values(pooled)
-        q_values = rearrange(q_values, '... a -> ... a')
+        # single actions
+
+        q_values = self.to_q_values(attended_tokens)
 
         return q_values
