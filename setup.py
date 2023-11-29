@@ -24,7 +24,8 @@ setup(
     'ema-pytorch>=0.3.1',
     'classifier-free-guidance-pytorch>=0.1.4',
     'torchtyping',
-    'torch>=2.0'
+    'torch>=2.0',
+    'x-transformers>=1.26.0'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',

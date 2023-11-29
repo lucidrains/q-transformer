@@ -16,7 +16,8 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 - [x] add n-step Q learning
 - [x] build the conservative regularization
 
-- [ ] improvise a cross attention variant + another decoder head, instead of concatenating previous actions at the frames + learned tokens stage. in other words, using a hierarchical transformer
+- [ ] improvise a cross attention variant + another decoder head, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
+
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 
 - [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator

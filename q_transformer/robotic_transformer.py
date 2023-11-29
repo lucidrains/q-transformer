@@ -16,6 +16,11 @@ from q_transformer.attend import Attend
 
 from classifier_free_guidance_pytorch import TextConditioner, AttentionTextConditioner, classifier_free_guidance
 
+from x_transformers import (
+    Decoder,
+    AutoregressiveWrapper
+)
+
 # helpers
 
 def exists(val):
@@ -705,10 +710,9 @@ class QRoboticTransformer(Module):
 
         return action_indices, max_q
 
-    @classifier_free_guidance
-    def forward(
+    def encode_state(
         self,
-        video,
+        video: Tensor,
         texts: Optional[Union[List[str], Tuple[str]]] = None,
         actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
@@ -758,7 +762,7 @@ class QRoboticTransformer(Module):
 
         # causal attention mask
 
-        attn_mask = torch.ones((frames, frames), dtype = torch.bool, device = device).triu(1)
+        attn_mask = ~torch.ones((frames, frames), dtype = torch.bool, device = device).triu(1)
         attn_mask = repeat(attn_mask, 'i j -> (i r1) (j r2)', r1 = self.num_learned_tokens, r2 = self.num_learned_tokens)
 
         # sinusoidal positional embedding
@@ -769,10 +773,28 @@ class QRoboticTransformer(Module):
 
         # attention
 
-        attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = ~attn_mask)
+        attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = attn_mask)
+
+        return attended_tokens
+
+    @classifier_free_guidance
+    def forward(
+        self,
+        video: Tensor,
+        texts: Optional[Union[List[str], Tuple[str]]] = None,
+        actions: Optional[Tensor] = None,
+        cond_drop_prob = 0.,
+    ):
+
+        encoded_state = self.encode_state(
+            video = video,
+            texts = texts,
+            actions = actions,
+            cond_drop_prob = cond_drop_prob
+        )
 
         # single actions
 
-        q_values = self.to_q_values(attended_tokens)
+        q_values = self.to_q_values(encoded_state)
 
         return q_values
