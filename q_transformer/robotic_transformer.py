@@ -736,8 +736,8 @@ class QRoboticTransformer(Module):
         self,
         video,
         texts: Optional[Union[List[str], Tuple[str]]] = None,
+        actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
-        prev_action_bin_ids: Optional[Tensor] = None
     ):
         if exists(texts) and isinstance(texts, tuple):
             texts = list(texts)
@@ -776,24 +776,6 @@ class QRoboticTransformer(Module):
 
         attn_mask = torch.ones((frames, frames), dtype = torch.bool, device = device).triu(1)
         attn_mask = repeat(attn_mask, 'i j -> (i r1) (j r2)', r1 = self.num_learned_tokens, r2 = self.num_learned_tokens)
-
-        # concat previous actions, for eventual q-transformer at https://github.com/lucidrains/q-transformer
-
-        assert self.concat_action_embeddings ^ (not exists(prev_action_bin_ids))
-
-        if self.concat_action_embeddings:
-
-            if not exists(prev_action_bin_ids):
-                prev_action_bin_ids = torch.full((*learned_tokens.shape[:-1], self.num_actions), self.null_action_bin_id, dtype = torch.long, device = self.device)
-            else:
-                prev_action_bin_ids = self.action_bin_offset + prev_action_bin_ids
-                prev_action_bin_ids = repeat(prev_action_bin_ids, 'b f ... -> b (f n) ...', n = tokens_per_frame)
-
-            action_bin_embed = self.action_bin_embeddings(prev_action_bin_ids)
-
-            action_bin_embed = rearrange(action_bin_embed, '... a d -> ... (a d)')
-
-            learned_tokens = torch.cat((learned_tokens, action_bin_embed), dim = -1)
 
         # sinusoidal positional embedding
 

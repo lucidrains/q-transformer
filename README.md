@@ -17,9 +17,9 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 - [x] build the conservative regularization
 
 - [ ] improvise a cross attention variant + another decoder head, instead of concatenating previous actions at the frames + learned tokens stage. in other words, using a hierarchical transformer
+- [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 
 - [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
-- [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 - [ ] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
