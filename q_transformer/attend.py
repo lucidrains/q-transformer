@@ -50,6 +50,7 @@ class Attend(nn.Module):
         self,
         dropout = 0.,
         flash = False,
+        causal = False,
         flash_config: dict = dict(
             enable_flash = True,
             enable_math = True,
@@ -60,6 +61,7 @@ class Attend(nn.Module):
         self.dropout = dropout
         self.attn_dropout = nn.Dropout(dropout)
 
+        self.causal = causal
         self.flash = flash
         assert not (flash and version.parse(torch.__version__) < version.parse('2.0.0')), 'in order to use flash attention, you must be using pytorch 2.0 or above'
 
@@ -85,6 +87,7 @@ class Attend(nn.Module):
             out = F.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask = mask,
+                is_causal = self.causal,
                 dropout_p = self.dropout if self.training else 0.
             )
 
@@ -112,6 +115,13 @@ class Attend(nn.Module):
         # similarity
 
         sim = einsum(f"b h i d, b h j d -> b h i j", q, k) * scale
+
+        # causal mask
+
+        if self.causal:
+            i, j = sim.shape[-2:]
+            causal_mask = torch.ones((i, j), dtype = torch.bool, device = sim.device).triu(j - i + 1)
+            sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)
 
         # key padding mask
 

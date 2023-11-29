@@ -18,7 +18,8 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [x] add n-step Q learning
 - [x] build the conservative regularization
 
-- [ ] improvise a cross attention variant + another decoder head, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
+- [x] improvise decoder head variant, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
+    - [ ] allow for cross attention to fine frame / learned tokens
 
 - [ ] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 
