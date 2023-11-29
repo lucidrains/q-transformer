@@ -113,6 +113,8 @@ class QLearner(Module):
     ):
         super().__init__()
 
+        self.is_multiple_actions = model.num_actions > 1
+
         # q-learning related hyperparameters
 
         self.discount_factor_gamma = discount_factor_gamma
@@ -358,6 +360,34 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
+    def autoregressive_q_learn(
+        self,
+        instructions:   Tuple[str],
+        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
+        actions:        TensorType['b', 't', 'n', int],
+        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
+        rewards:        TensorType['b', 't', float],
+        dones:          TensorType['b', 't', bool],
+        *,
+        monte_carlo_return = None
+
+    ) -> Tuple[Tensor, QIntermediates]:
+        """
+        einops
+
+        b - batch
+        c - channels
+        f - frames
+        h - height
+        w - width
+        t - timesteps
+        n - number of actions
+        a - action bins
+        q - q values
+        """
+
+        raise NotImplementedError
+
     def learn(
         self,
         *args,
@@ -374,9 +404,14 @@ class QLearner(Module):
 
         # main q-learning loss, whether single or n-step
 
-        if self.n_step_q_learning:
+        if self.is_multiple_actions:
+            td_loss, q_intermediates = self.autoregressive_q_learn(*args, **q_learn_kwargs)
+            num_timesteps = actions.shape[1]
+
+        elif self.n_step_q_learning:
             td_loss, q_intermediates = self.n_step_q_learn(*args, **q_learn_kwargs)
             num_timesteps = actions.shape[1]
+
         else:
             td_loss, q_intermediates = self.q_learn(*args, **q_learn_kwargs)
             num_timesteps = 1

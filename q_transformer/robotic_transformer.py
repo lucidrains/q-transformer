@@ -807,6 +807,7 @@ class QRoboticTransformer(Module):
 
         assert num_actions >= 1
 
+        self.num_actions = num_actions
         self.is_single_action = num_actions == 1
         self.action_bins = action_bins
 
