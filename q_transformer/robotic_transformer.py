@@ -613,7 +613,6 @@ class QRoboticTransformer(Module):
         cond_drop_prob = 0.2,
         use_attn_conditioner = False,
         conditioner_kwargs: dict = dict(),
-        concat_action_embeddings = False,      # will allow for action embeddings to be concatted just before attention layers - https://arxiv.org/abs/2309.10150 figure 3.
         action_dim = 16,                       # dimension of action embedding, defaults to embedding dimension of maxvit
         dueling = False,                       # https://arxiv.org/abs/1511.06581
         flash_attn = True
