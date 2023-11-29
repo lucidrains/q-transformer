@@ -252,7 +252,7 @@ class QLearner(Module):
         reward:         TensorType['b', float],
         done:           TensorType['b', bool],
         *,
-        monte_carlo_return = None
+        monte_carlo_return = -1e4
 
     ) -> Tuple[Tensor, QIntermediates]:
         # 'next' stands for the very next time step (whether state, q, actions etc)
@@ -270,7 +270,7 @@ class QLearner(Module):
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-        q_next = q_next.clamp(min = default(monte_carlo_return, -1e4))
+        q_next = q_next.clamp(min = monte_carlo_return)
 
         # Bellman's equation. most important line of code, hopefully done correctly
 
@@ -294,7 +294,7 @@ class QLearner(Module):
         rewards:        TensorType['b', 't', float],
         dones:          TensorType['b', 't', bool],
         *,
-        monte_carlo_return = None
+        monte_carlo_return = -1e4
 
     ) -> Tuple[Tensor, QIntermediates]:
         """
@@ -338,7 +338,7 @@ class QLearner(Module):
         q_pred = unpack_one(q_pred, time_ps, '*')
 
         q_next = self.ema_model(next_states, instructions).amax(dim = -1)
-        q_next = q_next.clamp(min = default(monte_carlo_return, -1e4))
+        q_next = q_next.clamp(min = monte_carlo_return)
 
         # prepare rewards and discount factors across timesteps
 
@@ -369,7 +369,7 @@ class QLearner(Module):
         rewards:        TensorType['b', 't', float],
         dones:          TensorType['b', 't', bool],
         *,
-        monte_carlo_return = None
+        monte_carlo_return = -1e4
 
     ) -> Tuple[Tensor, QIntermediates]:
         """
@@ -385,6 +385,18 @@ class QLearner(Module):
         a - action bins
         q - q values
         """
+
+        num_timesteps, device = states.shape[1], states.device
+
+        # fold time steps into batch
+
+        states, time_ps = pack_one(states, '* c f h w')
+
+        # repeat instructions per timestep
+
+        repeated_instructions = repeat_tuple_el(instructions, num_timesteps)
+
+        γ = self.discount_factor_gamma
 
         raise NotImplementedError
 
