@@ -4,7 +4,7 @@
 
 Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, Scalable Offline Reinforcement Learning via Autoregressive Q-Functions, out of Google Deepmind
 
-I will be keeping around the logic for Q-learning on single action just for final comparison with the proposed autoregressive discrete multiple actions. Also to serve as education for myself and the public.
+I will be keeping around the logic for Q-learning on single action just for final comparison with the proposed autoregressive Q-learning on multiple actions. Also to serve as education for myself and the public.
 
 ## Appreciation
 
