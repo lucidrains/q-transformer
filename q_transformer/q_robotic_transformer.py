@@ -568,7 +568,7 @@ class DuelingHead(Module):
         self,
         dim,
         expansion_factor = 2,
-        action_bins =256
+        action_bins = 256
     ):
         super().__init__()
         dim_hidden = dim * expansion_factor
@@ -657,7 +657,8 @@ class QHeadMultipleActions(Module):
         action_bins = 256,
         attn_depth = 2,
         attn_dim_head = 32,
-        attn_heads = 8
+        attn_heads = 8,
+        dueling = False
     ):
         super().__init__()
         self.num_actions = num_actions
@@ -675,6 +676,10 @@ class QHeadMultipleActions(Module):
         )
 
         self.final_norm = nn.LayerNorm(dim)
+
+        self.dueling = dueling
+        if dueling:
+            self.to_values = nn.Parameter(torch.zeros(num_actions, dim))
 
     @property
     def device(self):
@@ -757,9 +762,17 @@ class QHeadMultipleActions(Module):
         num_actions = embed.shape[-2]
         action_bin_embeddings = self.action_bin_embeddings[:num_actions]
 
-        q_values = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
+        if self.dueling:
+            advantages = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
 
-        return q_values
+            values = einsum('b n d, n d -> b n', embed, self.to_values[:num_actions])
+            values = rearrange(values, 'b n -> b n 1')
+
+            q_values = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
+        else:
+            q_values = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
+
+        return q_values.sigmoid()
 
 # Robotic Transformer
 
@@ -853,11 +866,10 @@ class QRoboticTransformer(Module):
                 dueling = dueling
             )
         else:
-            assert not dueling, 'dueling not supported yet for action transformer decoder'
-
             self.q_head = QHeadMultipleActions(
                 attend_dim,
                 action_bins = action_bins,
+                dueling = dueling,
                 **q_head_attn_kwargs
             )
 
