@@ -797,7 +797,6 @@ class QRoboticTransformer(Module):
         cond_drop_prob = 0.2,
         use_attn_conditioner = False,
         conditioner_kwargs: dict = dict(),
-        action_dim = 16,                       # dimension of action embedding, defaults to embedding dimension of maxvit
         dueling = False,                       # https://arxiv.org/abs/1511.06581
         flash_attn = True,
         q_head_attn_kwargs: dict = dict(
