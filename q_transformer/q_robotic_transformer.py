@@ -685,6 +685,22 @@ class QHeadMultipleActions(Module):
     def device(self):
         return self.action_embeddings.device
 
+    def get_q_values(self, embed):
+        num_actions = embed.shape[-2]
+        action_bin_embeddings = self.action_bin_embeddings[:num_actions]
+
+        if self.dueling:
+            advantages = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
+
+            values = einsum('b n d, n d -> b n', embed, self.to_values[:num_actions])
+            values = rearrange(values, 'b n -> b n 1')
+
+            q_values = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
+        else:
+            q_values = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
+
+        return q_values.sigmoid()
+
     def get_random_actions(self, batch_size):
         return torch.randint(0, self.action_bins, (batch_size, self.num_actions), device = self.device)
 
@@ -719,7 +735,7 @@ class QHeadMultipleActions(Module):
         action_bins = torch.stack(action_bins, dim = -1)
 
         if return_q_values:
-            all_q_values = einsum('b n d, n a d -> b n a', embed, self.action_bin_embeddings)
+            all_q_values = self.get_q_values(embed)
             return action_bins, all_q_values
 
         return action_bins
@@ -759,20 +775,7 @@ class QHeadMultipleActions(Module):
         embed = self.transformer(tokens)
         embed = self.final_norm(embed)
 
-        num_actions = embed.shape[-2]
-        action_bin_embeddings = self.action_bin_embeddings[:num_actions]
-
-        if self.dueling:
-            advantages = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
-
-            values = einsum('b n d, n d -> b n', embed, self.to_values[:num_actions])
-            values = rearrange(values, 'b n -> b n 1')
-
-            q_values = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
-        else:
-            q_values = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
-
-        return q_values.sigmoid()
+        return self.get_q_values(embed)
 
 # Robotic Transformer
 
