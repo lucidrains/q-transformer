@@ -20,9 +20,10 @@ setup(
   install_requires=[
     'accelerate',
     'beartype',
+    'classifier-free-guidance-pytorch>=0.1.4',
     'einops>=0.7.0',
     'ema-pytorch>=0.3.1',
-    'classifier-free-guidance-pytorch>=0.1.4',
+    'numpy',
     'torchtyping',
     'torch>=2.0'
   ],
