@@ -1,4 +1,5 @@
 from functools import partial, cache
+from random import random
 
 import torch
 import torch.nn.functional as F
@@ -891,6 +892,21 @@ class QRoboticTransformer(Module):
     ):
         encoded_state = self.encode_state(*args, **kwargs)
         return self.q_head.get_optimal_actions(encoded_state, return_q_values = return_q_values)
+
+    def get_actions(
+        self,
+        video,
+        *args,
+        prob_random_action = 0.,  # otherwise known as epsilon in RL
+        **kwargs,
+    ):
+        batch_size = video.shape[0]
+        assert 0. <= prob_random_action <= 1.
+
+        if random() < prob_random_action:
+            return self.get_random_actions(batch_size = batch_size)
+
+        return self.get_optimal_actions(video, *args, **kwargs)
 
     def encode_state(
         self,
