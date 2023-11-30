@@ -1,5 +1,6 @@
 from pathlib import Path
 from functools import partial
+from contextlib import nullcontext
 from collections import namedtuple
 
 import torch
@@ -7,7 +8,6 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
-from torch.cuda.amp import autocast
 from torch.utils.data import Dataset, DataLoader
 
 from torchtyping import TensorType
@@ -23,6 +23,7 @@ from q_transformer.q_robotic_transformer import QRoboticTransformer
 from q_transformer.optimizer import get_adam_optimizer
 
 from accelerate import Accelerator
+from accelerate.utils import DistributedDataParallelKwargs
 
 from ema_pytorch import EMA
 
@@ -90,6 +91,7 @@ class QLearner(Module):
         num_train_steps: int,
         learning_rate: float,
         min_reward: float = 0.,
+        grad_accum_every: int = 1,
         monte_carlo_return: Optional[float] = None,
         weight_decay: float = 0.,
         accelerator: Optional[Accelerator] = None,
@@ -144,7 +146,12 @@ class QLearner(Module):
         )
 
         if not exists(accelerator):
-            accelerator = Accelerator(**accelerator_kwargs)
+            accelerator = Accelerator(
+                kwargs_handlers = [
+                    DistributedDataParallelKwargs(find_unused_parameters = True)
+                ],
+                **accelerator_kwargs
+            )
 
         self.accelerator = accelerator
 
@@ -182,6 +189,8 @@ class QLearner(Module):
         # training step related
 
         self.num_train_steps = num_train_steps
+        self.grad_accum_every = grad_accum_every
+
         self.register_buffer('step', torch.tensor(0))
 
     def save(
@@ -244,7 +253,6 @@ class QLearner(Module):
         self.register_buffer('discount_matrix', discount_matrix, persistent = False)
         return self.discount_matrix
 
-    @autocast(enabled = False)
     def q_learn(
         self,
         instructions:   Tuple[str],
@@ -287,7 +295,6 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
-    @autocast(enabled = False)
     def n_step_q_learn(
         self,
         instructions:   Tuple[str],
@@ -392,7 +399,6 @@ class QLearner(Module):
 
         return self.autoregressive_q_learn(instructions, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
 
-    @autocast(enabled = False)
     def autoregressive_q_learn(
         self,
         instructions:   Tuple[str],
@@ -575,15 +581,19 @@ class QLearner(Module):
 
             # main q-learning algorithm
 
-            with self.accelerator.autocast():
+            for grad_accum_step in range(self.grad_accum_every):
+                is_last = grad_accum_step == (self.grad_accum_every - 1)
+                context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext
 
-                loss, (td_loss, conservative_reg_loss) = self.learn(
-                    *next(replay_buffer_iter),
-                    min_reward = min_reward,
-                    monte_carlo_return = monte_carlo_return
-                )
+                with self.accelerator.autocast(), context():
 
-                self.accelerator.backward(loss)
+                    loss, (td_loss, conservative_reg_loss) = self.learn(
+                        *next(replay_buffer_iter),
+                        min_reward = min_reward,
+                        monte_carlo_return = monte_carlo_return
+                    )
+
+                    self.accelerator.backward(loss / self.grad_accum_every)
 
             self.print(f'td loss: {td_loss.item():.3f}')
 
