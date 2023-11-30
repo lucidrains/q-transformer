@@ -357,6 +357,35 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
+    def autoregressive_q_learn_handle_single_timestep(
+        self,
+        instructions,
+        states,
+        actions,
+        next_states,
+        rewards,
+        dones,
+        *,
+        monte_carlo_return = None
+    ):
+        """
+        simply detect and handle single timestep
+        and use `autoregressive_q_learn` as more general function
+        """
+        if states.ndim == 5:
+            states = rearrange(states, 'b ... -> b 1 ...')
+
+        if actions.ndim == 2:
+            actions = rearrange(actions, 'b ... -> b 1 ...')
+
+        if rewards.ndim == 1:
+            rewards = rearrange(rewards, 'b -> b 1')
+
+        if dones.ndim == 1:
+            dones = rearrange(dones, 'b -> b 1')
+
+        return self.autoregressive_q_learn(instructions, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
+
     def autoregressive_q_learn(
         self,
         instructions:   Tuple[str],
@@ -472,7 +501,7 @@ class QLearner(Module):
         # main q-learning loss, whether single or n-step
 
         if self.is_multiple_actions:
-            td_loss, q_intermediates = self.autoregressive_q_learn(*args, **q_learn_kwargs)
+            td_loss, q_intermediates = self.autoregressive_q_learn_handle_single_timestep(*args, **q_learn_kwargs)
             num_timesteps = actions.shape[1]
 
         elif self.n_step_q_learning:
