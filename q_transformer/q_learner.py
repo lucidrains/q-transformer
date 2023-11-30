@@ -120,6 +120,8 @@ class QLearner(Module):
 
         self.discount_factor_gamma = discount_factor_gamma
         self.n_step_q_learning = n_step_q_learning
+
+        self.has_conservative_reg_loss = conservative_reg_loss_weight > 0.
         self.conservative_reg_loss_weight = conservative_reg_loss_weight
 
         self.register_buffer('discount_matrix', None, persistent = False)
@@ -186,6 +188,10 @@ class QLearner(Module):
         self.checkpoint_folder.mkdir(exist_ok = True, parents = True)
         assert self.checkpoint_folder.is_dir()
 
+        # dummy loss
+
+        self.register_buffer('zero', torch.tensor(0.))
+
         # training step related
 
         self.num_train_steps = num_train_steps
@@ -209,7 +215,8 @@ class QLearner(Module):
         pkg = dict(
             model = self.unwrap(self.model).state_dict(),
             ema_model = self.unwrap(self.ema_model).state_dict(),
-            optimizer = self.optimizer.state_dict()
+            optimizer = self.optimizer.state_dict(),
+            step = self.step.item()
         )
 
         torch.save(pkg, str(path))
@@ -224,6 +231,7 @@ class QLearner(Module):
         self.unwrap(self.ema_model).load_state_dict(pkg['ema_model'])
 
         self.optimizer.load_state_dict(pkg['optimizer'])
+        self.step.copy_(pkg['step'])
 
     @property
     def device(self):
@@ -527,6 +535,9 @@ class QLearner(Module):
         else:
             td_loss, q_intermediates = self.q_learn(*args, **q_learn_kwargs)
             num_timesteps = 1
+
+        if not self.has_conservative_reg_loss:
+            return loss, Losses(td_loss, self.zero)
 
         # calculate conservative regularization
         # section 4.2 in paper, eq 2

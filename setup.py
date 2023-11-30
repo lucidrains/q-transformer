@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'q-transformer',
   packages = find_packages(exclude=[]),
-  version = '0.0.31',
+  version = '0.0.32',
   license='MIT',
   description = 'Q-Transformer',
   author = 'Phil Wang',
