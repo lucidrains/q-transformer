@@ -498,7 +498,10 @@ class QLearner(Module):
             monte_carlo_return = monte_carlo_return
         )
 
-        # main q-learning loss, whether single or n-step
+        # main q-learning loss, respectively
+        # 1. proposed autoregressive q-learning for multiple actions - (handles single or n-step automatically)
+        # 2. single action - single timestep (classic q-learning)
+        # 3. single action - n-steps
 
         if self.is_multiple_actions:
             td_loss, q_intermediates = self.autoregressive_q_learn_handle_single_timestep(*args, **q_learn_kwargs)
