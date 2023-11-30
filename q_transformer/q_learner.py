@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
+from torch.cuda.amp import autocast
 from torch.utils.data import Dataset, DataLoader
 
 from torchtyping import TensorType
@@ -101,6 +102,7 @@ class QLearner(Module):
             update_after_step = 10,
             update_every = 5
         ),
+        max_grad_norm = 0.5,
         n_step_q_learning = False,
         discount_factor_gamma = 0.98,
         conservative_reg_loss_weight = 1., # they claim 1. is best in paper
@@ -131,6 +133,8 @@ class QLearner(Module):
             include_online_model = False,
             **q_target_ema_kwargs
         )
+
+        self.max_grad_norm = max_grad_norm
 
         self.optimizer = get_adam_optimizer(
             model.parameters(),
@@ -240,6 +244,7 @@ class QLearner(Module):
         self.register_buffer('discount_matrix', discount_matrix, persistent = False)
         return self.discount_matrix
 
+    @autocast(enabled = False)
     def q_learn(
         self,
         instructions:   Tuple[str],
@@ -282,6 +287,7 @@ class QLearner(Module):
 
         return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
+    @autocast(enabled = False)
     def n_step_q_learn(
         self,
         instructions:   Tuple[str],
@@ -386,6 +392,7 @@ class QLearner(Module):
 
         return self.autoregressive_q_learn(instructions, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
 
+    @autocast(enabled = False)
     def autoregressive_q_learn(
         self,
         instructions:   Tuple[str],
@@ -576,9 +583,13 @@ class QLearner(Module):
                     monte_carlo_return = monte_carlo_return
                 )
 
-                # self.accelerator.backward(loss)
+                self.accelerator.backward(loss)
 
             self.print(f'td loss: {td_loss.item():.3f}')
+
+            # clip gradients (transformer best practices)
+
+            self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
             # take optimizer step
 
