@@ -635,8 +635,11 @@ class QHeadSingleAction(Module):
         self,
         encoded_state,
         return_q_values = False,
+        actions = None,
         **kwargs
     ):
+        assert not exists(actions), 'single actions will never receive previous actions'
+
         q_values = self.forward(encoded_state)
 
         max_q, action_indices = q_values.max(dim = -1)
@@ -686,6 +689,23 @@ class QHeadMultipleActions(Module):
     def device(self):
         return self.action_embeddings.device
 
+    def maybe_append_actions(self, sos_tokens, actions: Optional[Tensor] = None):
+        if not exists(actions):
+            return sos_tokens
+
+        batch, num_actions = actions.shape
+        action_embeddings = self.action_bin_embeddings[:num_actions]
+
+        action_embeddings = repeat(action_embeddings, 'n a d -> b n a d', b = batch)
+        past_action_bins = repeat(actions, 'b n -> b n 1 d', d = action_embeddings.shape[-1])
+
+        bin_embeddings = action_embeddings.gather(-2, past_action_bins)
+        bin_embeddings = rearrange(bin_embeddings, 'b n 1 d -> b n d')
+
+        tokens, _ = pack((sos_tokens, bin_embeddings), 'b * d')
+        tokens = tokens[:, :self.num_actions] # last action bin not needed for the proposed q-learning
+        return tokens
+
     def get_q_values(self, embed):
         num_actions = embed.shape[-2]
         action_bin_embeddings = self.action_bin_embeddings[:num_actions]
@@ -710,15 +730,16 @@ class QHeadMultipleActions(Module):
         self,
         encoded_state,
         return_q_values = False,
+        actions: Optional[Tensor] = None,
         **kwargs
     ):
         sos_token = reduce(encoded_state, 'b ... d -> b 1 d', 'mean')
+        tokens = self.maybe_append_actions(sos_token, actions = actions)
 
         action_bins = []
-        head_inputs = sos_token
 
         for action_idx in range(self.num_actions):
-            embed = self.transformer(head_inputs)
+            embed = self.transformer(tokens)
             embed = self.final_norm(embed)
 
             last_embed = embed[:, action_idx]
@@ -729,7 +750,7 @@ class QHeadMultipleActions(Module):
             selected_action_bins = q_values.argmax(dim = -1)
             next_action_embed = bin_embeddings[selected_action_bins]
 
-            head_inputs, _ = pack((head_inputs, next_action_embed), 'b * d')
+            tokens, _ = pack((tokens, next_action_embed), 'b * d')
 
             action_bins.append(selected_action_bins)
 
@@ -758,20 +779,7 @@ class QHeadMultipleActions(Module):
 
         sos_token = reduce(encoded_state, 'b ... d -> b 1 d', 'mean')
 
-        if exists(actions):
-            batch, num_actions = actions.shape
-            action_embeddings = self.action_bin_embeddings[:num_actions]
-
-            action_embeddings = repeat(action_embeddings, 'n a d -> b n a d', b = batch)
-            past_action_bins = repeat(actions, 'b n -> b n 1 d', d = action_embeddings.shape[-1])
-
-            bin_embeddings = action_embeddings.gather(-2, past_action_bins)
-            bin_embeddings = rearrange(bin_embeddings, 'b n 1 d -> b n d')
-
-            tokens = torch.cat((sos_token, bin_embeddings), dim = -2)
-            tokens = tokens[:, :self.num_actions] # last action bin not needed for the proposed q-learning
-        else:
-            tokens = sos_token
+        tokens = self.maybe_append_actions(sos_token, actions = actions)
 
         embed = self.transformer(tokens)
         embed = self.final_norm(embed)
@@ -888,10 +896,11 @@ class QRoboticTransformer(Module):
         self,
         *args,
         return_q_values = False,
+        actions: Optional[Tensor] = None,
         **kwargs
     ):
         encoded_state = self.encode_state(*args, **kwargs)
-        return self.q_head.get_optimal_actions(encoded_state, return_q_values = return_q_values)
+        return self.q_head.get_optimal_actions(encoded_state, return_q_values = return_q_values, actions = actions)
 
     def get_actions(
         self,
