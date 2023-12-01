@@ -54,23 +54,25 @@ class RotaryEmbedding(Module):
     def __init__(self, dim, omega = 10000):
         super().__init__()
         inv_freq = 1.0 / (omega ** (torch.arange(0, dim, 4).float() / dim))
-        self.register_buffer("inv_freq", inv_freq)
+        self.register_buffer('inv_freq', inv_freq)
 
     @autocast(enabled = False)
     def forward(self, height_width):
         device, dtype = self.inv_freq.device, self.inv_freq.dtype
 
-        t = torch.arange(height_width, device = device).type(dtype)
-        freqs = torch.einsum('i , j -> i j', t, self.inv_freq)
-        freqs = torch.cat((freqs, freqs), dim = -1)
+        axial_pos = torch.arange(height_width, device = device).type(dtype)
+
+        freqs = torch.einsum('i, j -> i j', axial_pos, self.inv_freq)
+        freqs = repeat(freqs, '... f -> ... (f c)', c = 2)
 
         freqs = torch.broadcast_tensors(freqs[None, :, :], freqs[:, None, :])
         freqs = torch.cat(freqs, dim = -1)
-        return rearrange(freqs, '... d -> (...) d')
+        return rearrange(freqs, '... f -> (...) f')
 
 def rotate_half(x):
-    x1, x2 = x.chunk(2, dim = -1)
-    return torch.cat((-x2, x1), dim = -1)
+    x1, x2 = rearrange(x, '... (d c) -> ... d c', c = 2).unbind(dim = -1)
+    x = torch.stack((-x2, x1), dim = -1)
+    return rearrange(x, '... d c -> ... (d c)')
 
 @autocast(enabled = False)
 def apply_rotary_pos_emb(pos, t):
