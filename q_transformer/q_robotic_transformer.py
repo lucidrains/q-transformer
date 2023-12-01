@@ -253,6 +253,7 @@ class Attention(Module):
     def __init__(
         self,
         dim,
+        heads = 8,
         dim_head = 32,
         dropout = 0.,
         window_size = 7,
@@ -260,12 +261,12 @@ class Attention(Module):
         flash = True
     ):
         super().__init__()
-        assert (dim % dim_head) == 0, 'dimension should be divisible by dimension per head'
+        dim_inner = dim_head * heads
 
         self.norm = RMSNorm(dim)
-        self.heads = dim // dim_head
+        self.heads = heads
 
-        self.to_qkv = nn.Linear(dim, dim * 3, bias = False)
+        self.to_qkv = nn.Linear(dim, dim_inner * 3, bias = False)
 
         self.to_v_gates = nn.Sequential(
             nn.Linear(dim, self.heads),
@@ -280,7 +281,7 @@ class Attention(Module):
         )
 
         self.to_out = nn.Sequential(
-            nn.Linear(dim, dim, bias = False),
+            nn.Linear(dim_inner, dim, bias = False),
             nn.Dropout(dropout)
         )
 
@@ -338,6 +339,7 @@ class MaxViT(Module):
         num_classes,
         dim,
         depth: Tuple[int, ...],
+        heads = 8,
         dim_head = 64,
         dim_conv_stem = None,
         window_size = 7,
@@ -401,12 +403,12 @@ class MaxViT(Module):
                         use_layernorm = use_layernorm
                     ),
                     Rearrange('b d (x w1) (y w2) -> b x y w1 w2 d', w1 = w, w2 = w),  # block-like attention
-                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
+                    Residual(Attention(dim = layer_dim, heads = heads, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
                     Residual(FeedForward(dim = layer_dim, dropout = dropout)),
                     Rearrange('b x y w1 w2 d -> b d (x w1) (y w2)'),
 
                     Rearrange('b d (w1 x) (w2 y) -> b x y w1 w2 d', w1 = w, w2 = w),  # grid-like attention
-                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
+                    Residual(Attention(dim = layer_dim, heads = heads, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
                     Residual(FeedForward(dim = layer_dim, dropout = dropout)),
                     Rearrange('b x y w1 w2 d -> b d (w1 x) (w2 y)'),
                 ])
