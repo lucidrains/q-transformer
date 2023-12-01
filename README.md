@@ -19,8 +19,7 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [x] build the conservative regularization
 - [x] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [x] improvise decoder head variant, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
-    - [ ] allow for cross attention to fine frame / learned tokens
-
+    - [x] allow for cross attention to fine frame / learned tokens
 
 - [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
 - [ ] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
@@ -30,6 +29,9 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [ ] for exploration, allow for finely randomizing a subset of actions, and not all actions at once
 - [ ] figure out if one can train with randomized orders of actions - order could be sent as a conditioning that is concatted or summed before attention layers
     - [ ] offer an improvised variant where the first action token suggests the action ordering. all actions aren't made equal, and some may need to attend to past actions more than others
+- [ ] simple beam search function for optimal actions
+- [ ] cache kv for action decoding
+- [ ] improvise cross attention to past actions and states of timestep, transformer-xl fashion (w/ structured memory dropout)
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>
 
 ## Citations

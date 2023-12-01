@@ -81,10 +81,18 @@ class Residual(Module):
         return self.fn(x) + x
 
 class FeedForward(Module):
-    def __init__(self, dim, mult = 4, dropout = 0.):
+    def __init__(
+        self,
+        dim,
+        mult = 4,
+        dropout = 0.,
+        adaptive_ln = False
+    ):
         super().__init__()
+        self.adaptive_ln = adaptive_ln
+
         inner_dim = int(dim * mult)
-        self.norm = nn.LayerNorm(dim, elementwise_affine = False)
+        self.norm = nn.LayerNorm(dim, elementwise_affine = not adaptive_ln)
 
         self.net = nn.Sequential(
             nn.Linear(dim, inner_dim),
@@ -94,8 +102,14 @@ class FeedForward(Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, x, cond_fn = None):
+    def forward(
+        self,
+        x,
+        cond_fn: Optional[Callable] = None
+    ):
         x = self.norm(x)
+
+        assert not (self.adaptive_ln ^ exists(cond_fn))
 
         if exists(cond_fn):
             # adaptive layernorm
@@ -413,6 +427,7 @@ class TransformerAttention(Module):
         heads = 8,
         num_mem_kv = 4,
         norm_context = False,
+        adaptive_ln = False,
         dropout = 0.1,
         flash = True,
         causal = False
@@ -423,8 +438,10 @@ class TransformerAttention(Module):
 
         dim_context = default(dim_context, dim)
 
-        self.norm = nn.LayerNorm(dim, elementwise_affine = False)
-        self.context_norm = nn.LayerNorm(dim_context) if norm_context else nn.Identity()
+        self.adaptive_ln = adaptive_ln
+        self.norm = nn.LayerNorm(dim, elementwise_affine = not adaptive_ln)
+
+        self.context_norm = nn.LayerNorm(dim_context) if norm_context else None
 
         self.attn_dropout = nn.Dropout(dropout)
 
@@ -457,6 +474,8 @@ class TransformerAttention(Module):
     ):
         b = x.shape[0]
 
+        assert not (exists(context) ^ exists(self.context_norm))
+
         if exists(context):
             context = self.context_norm(context)
 
@@ -464,8 +483,9 @@ class TransformerAttention(Module):
 
         x = self.norm(x)
 
+        assert not (exists(cond_fn) ^ self.adaptive_ln)
+
         if exists(cond_fn):
-            # adaptive layer-norm
             x = cond_fn(x)
 
         q, k, v = self.to_q(x), *self.to_kv(kv_input).chunk(2, dim = -1)
@@ -498,15 +518,27 @@ class Transformer(Module):
         depth = 6,
         attn_dropout = 0.,
         ff_dropout = 0.,
+        adaptive_ln = False,
         flash_attn = True,
+        cross_attend = False,
         causal = False
     ):
         super().__init__()
         self.layers = ModuleList([])
+
+        attn_kwargs = dict(
+            dim = dim,
+            heads = heads,
+            dim_head = dim_head,
+            dropout = attn_dropout,
+            flash = flash_attn
+        )
+
         for _ in range(depth):
             self.layers.append(ModuleList([
-                TransformerAttention(dim = dim, heads =  heads, dropout = attn_dropout, flash = flash_attn, causal = causal),
-                FeedForward(dim = dim, dropout = ff_dropout)
+                TransformerAttention(**attn_kwargs, causal = causal, adaptive_ln = adaptive_ln, norm_context = False),
+                TransformerAttention(**attn_kwargs, norm_context = True) if cross_attend else None,
+                FeedForward(dim = dim, dropout = ff_dropout, adaptive_ln = adaptive_ln)
             ]))
 
     @beartype
@@ -514,12 +546,18 @@ class Transformer(Module):
         self,
         x,
         cond_fns: Optional[Tuple[Callable, ...]] = None,
-        attn_mask = None
+        attn_mask = None,
+        context: Optional[Tensor] = None
     ):
         cond_fns = iter(default(cond_fns, []))
 
-        for attn, ff in self.layers:
+        for attn, maybe_cross_attn, ff in self.layers:
              x = attn(x, attn_mask = attn_mask, cond_fn = next(cond_fns, None)) + x
+
+             if exists(maybe_cross_attn):
+                assert exists(context)
+                x = maybe_cross_attn(x, context = context) + x
+
              x = ff(x, cond_fn = next(cond_fns, None)) + x
 
         return x
@@ -676,6 +714,8 @@ class QHeadMultipleActions(Module):
             depth = attn_depth,
             dim_head = attn_dim_head,
             heads = attn_heads,
+            cross_attend = True,
+            adaptive_ln = False,
             causal = True
         )
 
@@ -739,7 +779,7 @@ class QHeadMultipleActions(Module):
         action_bins = []
 
         for action_idx in range(self.num_actions):
-            embed = self.transformer(tokens)
+            embed = self.transformer(tokens, context = encoded_state)
             embed = self.final_norm(embed)
 
             last_embed = embed[:, action_idx]
@@ -756,11 +796,11 @@ class QHeadMultipleActions(Module):
 
         action_bins = torch.stack(action_bins, dim = -1)
 
-        if return_q_values:
-            all_q_values = self.get_q_values(embed)
-            return action_bins, all_q_values
+        if not return_q_values:
+            return action_bins
 
-        return action_bins
+        all_q_values = self.get_q_values(embed)
+        return action_bins, all_q_values
 
     def forward(
         self,
@@ -781,7 +821,7 @@ class QHeadMultipleActions(Module):
 
         tokens = self.maybe_append_actions(sos_token, actions = actions)
 
-        embed = self.transformer(tokens)
+        embed = self.transformer(tokens, context = encoded_state)
         embed = self.final_norm(embed)
 
         return self.get_q_values(embed)
@@ -862,7 +902,8 @@ class QRoboticTransformer(Module):
             dim_head = dim_head,
             heads = heads,
             depth = depth,
-            flash_attn = flash_attn
+            flash_attn = flash_attn,
+            adaptive_ln = True
         )
 
         self.cond_drop_prob = cond_drop_prob
