@@ -4,6 +4,7 @@ from functools import partial, cache
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
+from torch.cuda.amp import autocast
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 
@@ -26,6 +27,9 @@ def xnor(x, y):
     """ (True, True) or (False, False) -> True """
     return not (x ^ y)
 
+def divisible_by(num, den):
+    return (num % den) == 0
+
 def default(val, d):
     return val if exists(val) else d
 
@@ -42,6 +46,35 @@ def pack_one(x, pattern):
 
 def unpack_one(x, ps, pattern):
     return unpack(x, ps, pattern)[0]
+
+# 2d rotary positional embedding
+# https://arxiv.org/abs/2104.09864
+
+class RotaryEmbedding(Module):
+    def __init__(self, dim, omega = 10000):
+        super().__init__()
+        inv_freq = 1.0 / (omega ** (torch.arange(0, dim, 4).float() / dim))
+        self.register_buffer("inv_freq", inv_freq)
+
+    @autocast(enabled = False)
+    def forward(self, height_width):
+        device, dtype = self.inv_freq.device, self.inv_freq.dtype
+
+        t = torch.arange(height_width, device = device).type(dtype)
+        freqs = torch.einsum('i , j -> i j', t, self.inv_freq)
+        freqs = torch.cat((freqs, freqs), dim = -1)
+
+        freqs = torch.broadcast_tensors(freqs[None, :, :], freqs[:, None, :])
+        freqs = torch.cat(freqs, dim = -1)
+        return rearrange(freqs, '... d -> (...) d')
+
+def rotate_half(x):
+    x1, x2 = x.chunk(2, dim = -1)
+    return torch.cat((-x2, x1), dim = -1)
+
+@autocast(enabled = False)
+def apply_rotary_pos_emb(pos, t):
+    return t * pos.cos() + rotate_half(t) * pos.sin()
 
 # sync batchnorm
 
@@ -92,8 +125,8 @@ class Residual(Module):
         super().__init__()
         self.fn = fn
 
-    def forward(self, x):
-        return self.fn(x) + x
+    def forward(self, x, **kwargs):
+        return self.fn(x, **kwargs) + x
 
 class FeedForward(Module):
     def __init__(
@@ -151,7 +184,6 @@ class SqueezeExcitation(Module):
     def forward(self, x):
         return x * self.gate(x)
 
-
 class MBConvResidual(Module):
     def __init__(self, fn, dropout = 0.):
         super().__init__()
@@ -169,12 +201,12 @@ class Dropsample(Module):
         self.prob = prob
   
     def forward(self, x):
-        device = x.device
+        batch, device = x.shape[0], x.device
 
         if self.prob == 0. or (not self.training):
             return x
 
-        keep_mask = torch.FloatTensor((x.shape[0], 1, 1, 1), device = device).uniform_() > self.prob
+        keep_mask = torch.FloatTensor((batch, 1, 1, 1), device = device).uniform_() > self.prob
         return x * keep_mask / (1 - self.prob)
 
 def MBConv(
@@ -222,23 +254,27 @@ class Attention(Module):
         dim_head = 32,
         dropout = 0.,
         window_size = 7,
-        num_mem_kv = 4
+        num_mem_kv = 4,
+        flash = True
     ):
         super().__init__()
         assert (dim % dim_head) == 0, 'dimension should be divisible by dimension per head'
 
         self.norm = RMSNorm(dim)
-
         self.heads = dim // dim_head
-        self.scale = dim_head ** -0.5
 
         self.to_qkv = nn.Linear(dim, dim * 3, bias = False)
 
-        self.mem_kv = nn.Parameter(torch.randn(2, self.heads, num_mem_kv, dim_head))
+        self.to_v_gates = nn.Sequential(
+            nn.Linear(dim, self.heads),
+            nn.Sigmoid(),
+            Rearrange('b n h -> b h n 1')
+        )
 
-        self.attend = nn.Sequential(
-            nn.Softmax(dim = -1),
-            nn.Dropout(dropout)
+        self.attend = Attend(
+            causal = False,
+            dropout = dropout,
+            flash = flash
         )
 
         self.to_out = nn.Sequential(
@@ -246,20 +282,11 @@ class Attention(Module):
             nn.Dropout(dropout)
         )
 
-        # relative positional bias
-
-        self.rel_pos_bias = nn.Embedding((2 * window_size - 1) ** 2, self.heads)
-
-        pos = torch.arange(window_size)
-        grid = torch.stack(torch.meshgrid(pos, pos, indexing = 'ij'))
-        grid = rearrange(grid, 'c i j -> (i j) c')
-        rel_pos = rearrange(grid, 'i ... -> i 1 ...') - rearrange(grid, 'j ... -> 1 j ...')
-        rel_pos += window_size - 1
-        rel_pos_indices = (rel_pos * torch.tensor([2 * window_size - 1, 1])).sum(dim = -1)
-
-        self.register_buffer('rel_pos_indices', rel_pos_indices, persistent = False)
-
-    def forward(self, x):
+    def forward(
+        self,
+        x,
+        rotary_emb = None
+    ):
         batch, height, width, window_height, window_width, _, device, h = *x.shape, x.device, self.heads
 
         x = self.norm(x)
@@ -272,41 +299,25 @@ class Attention(Module):
 
         q, k, v = self.to_qkv(x).chunk(3, dim = -1)
 
+        g = self.to_v_gates(x)
+
         # split heads
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
 
-        # scale
+        # 2d rotary
 
-        q = q * self.scale
-
-        # null / memory / register kv
-
-        mk, mv = map(lambda t: repeat(t, 'h n d -> b h n d', b = q.shape[0]),  self.mem_kv)
-        num_mem = mk.shape[-2]
-
-        k = torch.cat((mk, k), dim = -2)
-        v = torch.cat((mv, v), dim = -2)
-
-        # sim
-
-        sim = einsum('b h i d, b h j d -> b h i j', q, k)
-
-        # add positional bias
-
-        bias = self.rel_pos_bias(self.rel_pos_indices)
-
-        bias = F.pad(bias, (0, 0, num_mem, 0), value = 0.)
-
-        sim = sim + rearrange(bias, 'i j h -> h i j')
+        if exists(rotary_emb):
+            q = apply_rotary_pos_emb(rotary_emb, q)
+            k = apply_rotary_pos_emb(rotary_emb, k)
 
         # attention
 
-        attn = self.attend(sim)
+        out = self.attend(q, k, v)
 
-        # aggregate
+        # gate values per head, allow for attending to nothing
 
-        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out = out * g
 
         # merge heads
 
@@ -318,24 +329,24 @@ class Attention(Module):
         return rearrange(out, '(b x y) ... -> b x y ...', x = height, y = width)
 
 class MaxViT(Module):
+    @beartype
     def __init__(
         self,
         *,
         num_classes,
         dim,
-        depth,
-        dim_head = 32,
+        depth: Tuple[int, ...],
+        dim_head = 64,
         dim_conv_stem = None,
         window_size = 7,
         mbconv_expansion_rate = 4,
         mbconv_shrinkage_rate = 0.25,
         use_layernorm = True,
         dropout = 0.1,
-        channels = 3
+        channels = 3,
+        flash_attn = True
     ):
         super().__init__()
-        assert isinstance(depth, tuple), 'depth needs to be tuple if integers indicating number of transformer blocks at that stage'
-
         # convolutional stem
 
         dim_conv_stem = default(dim_conv_stem, dim)
@@ -357,7 +368,15 @@ class MaxViT(Module):
 
         # shorthand for window size for efficient block - grid like attention
 
+        self.window_size = window_size
         w = window_size
+
+        # rotary embedding
+
+        assert divisible_by(dim_head, 4), f'{dim_head} must be divisible by 4 for axial rotary embedding for maxvit'
+
+        self.axial_rotary_emb = RotaryEmbedding(dim_head)
+        self.register_buffer('cached_rotary_emb', self.axial_rotary_emb(window_size), persistent = False)
 
         # iterate through stages
 
@@ -370,7 +389,7 @@ class MaxViT(Module):
 
                 cond_hidden_dims.append(stage_dim_in)
 
-                block = nn.Sequential(
+                block = nn.ModuleList([
                     MBConv(
                         stage_dim_in,
                         layer_dim,
@@ -380,15 +399,15 @@ class MaxViT(Module):
                         use_layernorm = use_layernorm
                     ),
                     Rearrange('b d (x w1) (y w2) -> b x y w1 w2 d', w1 = w, w2 = w),  # block-like attention
-                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w)),
+                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
                     Residual(FeedForward(dim = layer_dim, dropout = dropout)),
                     Rearrange('b x y w1 w2 d -> b d (x w1) (y w2)'),
 
                     Rearrange('b d (w1 x) (w2 y) -> b x y w1 w2 d', w1 = w, w2 = w),  # grid-like attention
-                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w)),
+                    Residual(Attention(dim = layer_dim, dim_head = dim_head, dropout = dropout, window_size = w, flash = flash_attn)),
                     Residual(FeedForward(dim = layer_dim, dropout = dropout)),
                     Rearrange('b x y w1 w2 d -> b d (w1 x) (w2 y)'),
-                )
+                ])
 
                 self.layers.append(block)
 
@@ -408,23 +427,46 @@ class MaxViT(Module):
     @beartype
     def forward(
         self,
-        x,
+        img,
         texts: Optional[List[str]] = None,
         cond_fns: Optional[Tuple[Callable, ...]] = None,
         cond_drop_prob = 0.,
         return_embeddings = False
     ):
-        x = self.conv_stem(x)
+        assert all([divisible_by(d, self.window_size) for d in img.shape[-2:]])
+
+        x = self.conv_stem(img)
+
+        rotary_emb = self.cached_rotary_emb
 
         cond_fns = iter(default(cond_fns, []))
 
-        for stage in self.layers:
+        for (
+            mb_conv,
+            rearr_windowed_in,
+            windowed_attn,
+            windowed_ff,
+            rearr_windowed_out,
+            rearr_grid_in,
+            grid_attn,
+            grid_ff,
+            rearr_grid_out
+        ) in self.layers:
             cond_fn = next(cond_fns, None)
 
             if exists(cond_fn):
                 x = cond_fn(x)
 
-            x = stage(x)
+            x = mb_conv(x)
+            x = rearr_windowed_in(x)
+            x = windowed_attn(x, rotary_emb = rotary_emb)
+            x = windowed_ff(x)
+            x = rearr_windowed_out(x)
+
+            x = rearr_grid_in(x)
+            x = grid_attn(x, rotary_emb = rotary_emb)
+            x = grid_ff(x)
+            x = rearr_grid_out(x)
 
         if return_embeddings:
             return x
@@ -536,7 +578,8 @@ class Transformer(Module):
         adaptive_ln = False,
         flash_attn = True,
         cross_attend = False,
-        causal = False
+        causal = False,
+        final_norm = True
     ):
         super().__init__()
         self.layers = ModuleList([])
@@ -555,6 +598,8 @@ class Transformer(Module):
                 TransformerAttention(**attn_kwargs, norm_context = True) if cross_attend else None,
                 FeedForward(dim = dim, dropout = ff_dropout, adaptive_ln = adaptive_ln)
             ]))
+
+        self.norm = RMSNorm(dim) if final_norm else nn.Identity()
 
     @beartype
     def forward(
@@ -575,7 +620,7 @@ class Transformer(Module):
 
              x = ff(x, cond_fn = next(cond_fns, None)) + x
 
-        return x
+        return self.norm(x)
 
 # token learner module
 
@@ -731,7 +776,8 @@ class QHeadMultipleActions(Module):
             heads = attn_heads,
             cross_attend = True,
             adaptive_ln = False,
-            causal = True
+            causal = True,
+            final_norm = True
         )
 
         self.final_norm = RMSNorm(dim)
@@ -795,7 +841,6 @@ class QHeadMultipleActions(Module):
 
         for action_idx in range(self.num_actions):
             embed = self.transformer(tokens, context = encoded_state)
-            embed = self.final_norm(embed)
 
             last_embed = embed[:, action_idx]
             bin_embeddings = self.action_bin_embeddings[action_idx]
@@ -837,7 +882,6 @@ class QHeadMultipleActions(Module):
         tokens = self.maybe_append_actions(sos_token, actions = actions)
 
         embed = self.transformer(tokens, context = encoded_state)
-        embed = self.final_norm(embed)
 
         return self.get_q_values(embed)
 
@@ -918,7 +962,8 @@ class QRoboticTransformer(Module):
             heads = heads,
             depth = depth,
             flash_attn = flash_attn,
-            adaptive_ln = True
+            adaptive_ln = True,
+            final_norm = True
         )
 
         self.cond_drop_prob = cond_drop_prob

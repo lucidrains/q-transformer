@@ -20,9 +20,9 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [x] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)
 - [x] improvise decoder head variant, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
     - [x] allow for cross attention to fine frame / learned tokens
+- [x] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
 
 - [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
-- [ ] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 
