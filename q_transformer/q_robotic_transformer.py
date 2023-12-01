@@ -1,5 +1,5 @@
-from functools import partial, cache
 from random import random
+from functools import partial, cache
 
 import torch
 import torch.nn.functional as F
@@ -21,6 +21,10 @@ from classifier_free_guidance_pytorch import TextConditioner, AttentionTextCondi
 
 def exists(val):
     return val is not None
+
+def xnor(x, y):
+    """ (True, True) or (False, False) -> True """
+    return not (x ^ y)
 
 def default(val, d):
     return val if exists(val) else d
@@ -109,7 +113,7 @@ class FeedForward(Module):
     ):
         x = self.norm(x)
 
-        assert not (self.adaptive_ln ^ exists(cond_fn))
+        assert xnor(self.adaptive_ln, exists(cond_fn))
 
         if exists(cond_fn):
             # adaptive layernorm
@@ -474,7 +478,7 @@ class TransformerAttention(Module):
     ):
         b = x.shape[0]
 
-        assert not (exists(context) ^ exists(self.context_norm))
+        assert xnor(exists(context), exists(self.context_norm))
 
         if exists(context):
             context = self.context_norm(context)
@@ -483,7 +487,7 @@ class TransformerAttention(Module):
 
         x = self.norm(x)
 
-        assert not (exists(cond_fn) ^ self.adaptive_ln)
+        assert xnor(exists(cond_fn), self.adaptive_ln)
 
         if exists(cond_fn):
             x = cond_fn(x)
