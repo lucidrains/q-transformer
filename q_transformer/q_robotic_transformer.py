@@ -32,6 +32,11 @@ def default(val, d):
 def cast_tuple(val, length = 1):
     return val if isinstance(val, tuple) else ((val,) * length)
 
+# tensor helpers
+
+def l2norm(t, dim = -1):
+    return F.normalize(t, dim = dim)
+
 def pack_one(x, pattern):
     return pack([x], pattern)
 
@@ -48,19 +53,25 @@ def MaybeSyncBatchnorm2d(is_distributed = None):
     is_distributed = default(is_distributed, get_is_distributed())
     return nn.SyncBatchNorm if is_distributed else nn.BatchNorm2d
 
-# channel layernorm
+# channel rmsnorm
 
-class ChanLayerNorm(nn.Module):
-    def __init__(self, dim, eps = 1e-5):
+class RMSNorm(Module):
+    def __init__(self, dim, affine = True):
         super().__init__()
-        self.eps = eps
-        self.gamma = nn.Parameter(torch.ones(dim, 1, 1))
-        self.beta = nn.Parameter(torch.zeros(dim, 1, 1))
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.ones(dim)) if affine else 1.
 
     def forward(self, x):
-        var = torch.var(x, dim = 1, unbiased = False, keepdim = True)
-        mean = torch.mean(x, dim = 1, keepdim = True)
-        return (x - mean) * var.clamp(min = self.eps).rsqrt() * self.gamma + self.beta
+        return l2norm(x) * self.gamma * self.scale
+
+class ChanRMSNorm(Module):
+    def __init__(self, dim, affine = True):
+        super().__init__()
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.ones(dim, 1, 1)) if affine else 1.
+
+    def forward(self, x):
+        return l2norm(x, dim = 1) * self.gamma * self.scale
 
 # sinusoidal positions
 
@@ -96,7 +107,7 @@ class FeedForward(Module):
         self.adaptive_ln = adaptive_ln
 
         inner_dim = int(dim * mult)
-        self.norm = nn.LayerNorm(dim, elementwise_affine = not adaptive_ln)
+        self.norm = RMSNorm(dim, affine = not adaptive_ln)
 
         self.net = nn.Sequential(
             nn.Linear(dim, inner_dim),
@@ -181,7 +192,7 @@ def MBConv(
     stride = 2 if downsample else 1
 
     if use_layernorm:
-        norm_klass = ChanLayerNorm
+        norm_klass = ChanRMSNorm
     else:
         norm_klass = MaybeSyncBatchnorm2d(is_distributed)
 
@@ -216,7 +227,7 @@ class Attention(Module):
         super().__init__()
         assert (dim % dim_head) == 0, 'dimension should be divisible by dimension per head'
 
-        self.norm = nn.LayerNorm(dim)
+        self.norm = RMSNorm(dim)
 
         self.heads = dim // dim_head
         self.scale = dim_head ** -0.5
@@ -390,7 +401,7 @@ class MaxViT(Module):
 
         self.mlp_head = nn.Sequential(
             Reduce('b d h w -> b d', 'mean'),
-            nn.LayerNorm(embed_dim),
+            RMSNorm(embed_dim),
             nn.Linear(embed_dim, num_classes)
         )
 
@@ -443,9 +454,9 @@ class TransformerAttention(Module):
         dim_context = default(dim_context, dim)
 
         self.adaptive_ln = adaptive_ln
-        self.norm = nn.LayerNorm(dim, elementwise_affine = not adaptive_ln)
+        self.norm = RMSNorm(dim, affine = not adaptive_ln)
 
-        self.context_norm = nn.LayerNorm(dim_context) if norm_context else None
+        self.context_norm = RMSNorm(dim_context) if norm_context else None
 
         self.attn_dropout = nn.Dropout(dropout)
 
@@ -665,7 +676,7 @@ class QHeadSingleAction(Module):
         else:
             self.to_q_values = nn.Sequential(
                 Reduce('b (f n) d -> b d', 'mean', n = num_learned_tokens),
-                nn.LayerNorm(dim),
+                RMSNorm(dim),
                 nn.Linear(dim, action_bins),
                 nn.Sigmoid()
             )
@@ -723,7 +734,7 @@ class QHeadMultipleActions(Module):
             causal = True
         )
 
-        self.final_norm = nn.LayerNorm(dim)
+        self.final_norm = RMSNorm(dim)
 
         self.dueling = dueling
         if dueling:
