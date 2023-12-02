@@ -272,7 +272,7 @@ class QLearner(Module):
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[Tensor, QIntermediates]:
+    ) -> Tuple[TensorType[()], QIntermediates]:
         # 'next' stands for the very next time step (whether state, q, actions etc)
 
         γ = self.discount_factor_gamma
@@ -314,7 +314,7 @@ class QLearner(Module):
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[Tensor, QIntermediates]:
+    ) -> Tuple[TensorType[()], QIntermediates]:
         """
         einops
 
@@ -418,7 +418,7 @@ class QLearner(Module):
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[Tensor, QIntermediates]:
+    ) -> Tuple[TensorType[()], QIntermediates]:
         """
         einops
 
