@@ -22,7 +22,12 @@ I will be keeping around the logic for Q-learning on single action just for fina
     - [x] allow for cross attention to fine frame / learned tokens
 - [x] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
 
-- [ ] build out a simple dataset creator class, taking in the environment as an iterator / generator
+- [x] build out a simple dataset creator class, taking in the environment and model and returning a folder that can be accepted by a `ReplayDataset`
+    - [x] finish basic environment loop
+    - [ ] store memories to memmapped files in designated folder
+    - [ ] `ReplayDataset` that takes in folder
+        - [ ] 1 time step option
+        - [ ] n-time steps
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 

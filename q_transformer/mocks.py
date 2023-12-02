@@ -3,6 +3,19 @@ from random import randrange
 import torch
 from torch.utils.data import Dataset
 
+from q_transformer.agent import BaseEnvironment
+
+class MockEnvironment(BaseEnvironment):
+    def init(self):
+        return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)
+
+    def forward(self, actions):
+        rewards = torch.randn((), device = self.device)
+        next_states = torch.randn(self.state_shape, device = self.device)
+        done = torch.zeros((), device = self.device, dtype = torch.bool)
+
+        return rewards, next_states, done
+
 class MockReplayDataset(Dataset):
     def __init__(
         self,

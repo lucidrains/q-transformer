@@ -792,7 +792,7 @@ class QHeadMultipleActions(Module):
 
     @property
     def device(self):
-        return self.action_embeddings.device
+        return self.action_bin_embeddings.device
 
     def maybe_append_actions(self, sos_tokens, actions: Optional[Tensor] = None):
         if not exists(actions):
@@ -1093,7 +1093,7 @@ class QRoboticTransformer(Module):
     def forward(
         self,
         video: Tensor,
-        texts: Optional[Union[List[str], Tuple[str]]] = None,
+        texts: Optional[List[str]] = None,
         actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
     ):
