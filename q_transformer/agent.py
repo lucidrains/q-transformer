@@ -23,6 +23,36 @@ from tqdm import tqdm
 def exists(v):
     return v is not None
 
+# replay memory dataset
+
+class ReplayMemoryDataset(Dataset):
+    def __init__(
+        self,
+        folder: str,
+        num_timesteps = 1
+    ):
+        assert num_timesteps >= 1
+        self.is_single_timestep = num_timesteps == 1
+
+        folder = Path(folder)
+        assert folder.exists() and folder.is_dir()
+
+        states_path = folder / 'states.memmap.npy'
+        actions_path = folder / 'actions.memmap.npy'
+        rewards_path = folder / 'rewards.memmap.npy'
+        dones_path = folder / 'dones.memmap.npy'
+
+        self.states = np.memmap(str(states_path), dtype = 'float32', mode = 'r')
+        self.actions = np.memmap(str(actions_path), dtype = 'int', mode = 'r')
+        self.rewards = np.memmap(str(rewards_path), dtype = 'float32', mode = 'r')
+        self.dones = np.memmap(str(dones_path), dtype = 'bool', mode = 'r')
+
+    def __len__(self):
+        raise NotImplementedError
+
+    def __getitem__(self, idx):
+        raise NotImplementedError
+
 # base environment class to extend
 
 class BaseEnvironment(Module):
