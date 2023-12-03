@@ -24,7 +24,7 @@ I will be keeping around the logic for Q-learning on single action just for fina
 
 - [x] build out a simple dataset creator class, taking in the environment and model and returning a folder that can be accepted by a `ReplayDataset`
     - [x] finish basic environment loop
-    - [ ] store memories to memmapped files in designated folder
+    - [x] store memories to memmapped files in designated folder
     - [ ] `ReplayDataset` that takes in folder
         - [ ] 1 time step option
         - [ ] n-time steps

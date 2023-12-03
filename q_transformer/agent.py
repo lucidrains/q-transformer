@@ -60,7 +60,7 @@ class Agent(Module):
         q_transformer: QRoboticTransformer,
         *,
         environment: BaseEnvironment,
-        dataset_folder: str = './dataset',
+        memories_dataset_folder: str = './replay_memories_data',
         num_episodes: int = 1000,
         max_num_steps_per_episode: int = 10000,
         epsilon_start: float = 0.25,
@@ -73,23 +73,38 @@ class Agent(Module):
 
         assert 0. <= epsilon_start <= 1.
         assert 0. <= epsilon_end <= 1.
+        assert epsilon_start >= epsilon_end
 
         self.epsilon_start = epsilon_start
         self.epsilon_end = epsilon_end
+        self.num_steps_to_target_epsilon = num_steps_to_target_epsilon
+        self.epsilon_slope = (epsilon_end - epsilon_start) / num_steps_to_target_epsilon
 
         self.num_episodes = num_episodes
         self.max_num_steps_per_episode = max_num_steps_per_episode
-        self.num_steps_to_target_epsilon = num_steps_to_target_epsilon
 
-        self.dataset_folder = Path(dataset_folder)
-        self.dataset_folder.mkdir(exist_ok = True, parents = True)
-        assert self.dataset_folder.is_dir()
+        mem_path = Path(memories_dataset_folder)
+        self.memories_dataset_folder = mem_path
+
+        mem_path.mkdir(exist_ok = True, parents = True)
+        assert mem_path.is_dir()
+
+        states_path = mem_path / 'states.memmap.npy'
+        actions_path = mem_path / 'actions.memmap.npy'
+        rewards_path = mem_path / 'rewards.memmap.npy'
+        dones_path = mem_path / 'dones.memmap.npy'
+
+        prec_shape = (num_episodes, max_num_steps_per_episode)
+        num_actions = q_transformer.num_actions
+        state_shape = environment.state_shape
+
+        self.states = np.memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
+        self.actions = np.memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
+        self.rewards = np.memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
+        self.dones = np.memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
 
     def get_epsilon(self, step):
-        if step >= self.num_steps_to_target_epsilon:
-            return self.epsilon_end
-
-        return ((self.epsilon_end - self.epsilon_start) / float(self.num_steps_to_target_epsilon)) * float(step) + self.epsilon_start
+        return max(self.epsilon_end, self.epsilon_slope * float(step) + self.epsilon_start)
 
     @beartype
     @torch.no_grad()
@@ -101,9 +116,9 @@ class Agent(Module):
 
             instruction, curr_state = self.environment.init()
 
-            memories = []
-
             for step in tqdm(range(self.max_num_steps_per_episode)):
+                last_step = step == (self.max_num_steps_per_episode - 1)
+
                 epsilon = self.get_epsilon(step)
 
                 actions = self.q_transformer.get_actions(
@@ -114,6 +129,27 @@ class Agent(Module):
 
                 reward, next_state, done = self.environment(actions)
 
-                memories.append((curr_state, actions, reward, next_state, done))
+                done = done | last_step
 
-        return memories
+                # store memories using memmap, for later reflection and learning
+
+                self.states[episode, step] = curr_state
+                self.actions[episode, step] = actions
+                self.rewards[episode, step] = reward
+                self.dones[episode, step] = done
+
+                # if done, move onto next episode
+
+                if done:
+                    break
+
+                # set next state
+
+                curr_state = next_state
+
+            self.states.flush()
+            self.actions.flush()
+            self.rewards.flush()
+            self.dones.flush()
+
+        print(f'completed, memories stored to {str(self.memories_dataset_folder)}')
