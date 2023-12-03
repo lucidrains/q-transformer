@@ -29,6 +29,8 @@ I will be keeping around the logic for Q-learning on single action just for fina
         - [ ] 1 time step option
         - [ ] n-time steps
 
+- [ ] show a simple end-to-end example, in the same style as all other repos
+
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 
 - [ ] for exploration, allow for finely randomizing a subset of actions, and not all actions at once
