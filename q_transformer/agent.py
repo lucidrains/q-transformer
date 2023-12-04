@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import numpy as np
+from numpy.lib.format import open_memmap
 
 import torch
 from torch import nn, einsum, Tensor
@@ -42,10 +42,10 @@ class ReplayMemoryDataset(Dataset):
         rewards_path = folder / 'rewards.memmap.npy'
         dones_path = folder / 'dones.memmap.npy'
 
-        self.states = np.memmap(str(states_path), dtype = 'float32', mode = 'r')
-        self.actions = np.memmap(str(actions_path), dtype = 'int', mode = 'r')
-        self.rewards = np.memmap(str(rewards_path), dtype = 'float32', mode = 'r')
-        self.dones = np.memmap(str(dones_path), dtype = 'bool', mode = 'r')
+        self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')
+        self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')
+        self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')
+        self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'r')
 
     def __len__(self):
         raise NotImplementedError
@@ -128,10 +128,10 @@ class Agent(Module):
         num_actions = q_transformer.num_actions
         state_shape = environment.state_shape
 
-        self.states = np.memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
-        self.actions = np.memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
-        self.rewards = np.memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
-        self.dones = np.memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
+        self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
+        self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
+        self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
+        self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
 
     def get_epsilon(self, step):
         return max(self.epsilon_end, self.epsilon_slope * float(step) + self.epsilon_start)
