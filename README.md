@@ -21,18 +21,18 @@ I will be keeping around the logic for Q-learning on single action just for fina
 - [x] improvise decoder head variant, instead of concatenating previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder
     - [x] allow for cross attention to fine frame / learned tokens
 - [x] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change
-
 - [x] build out a simple dataset creator class, taking in the environment and model and returning a folder that can be accepted by a `ReplayDataset`
     - [x] finish basic environment loop
     - [x] store memories to memmapped files in designated folder
-    - [ ] `ReplayDataset` that takes in folder
-        - [ ] 1 time step option
-        - [ ] n-time steps
+    - [x] `ReplayDataset` that takes in folder
+        - [x] 1 time step option
+        - [x] n-time steps
 
 - [ ] show a simple end-to-end example, in the same style as all other repos
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 
+- [ ] handle multiple instructions correctly, but also handle no instructions, in case one wants to train a robot doing a single specialized task
 - [ ] for exploration, allow for finely randomizing a subset of actions, and not all actions at once
 - [ ] figure out if one can train with randomized orders of actions - order could be sent as a conditioning that is concatted or summed before attention layers
     - [ ] offer an improvised variant where the first action token suggests the action ordering. all actions aren't made equal, and some may need to attend to past actions more than others

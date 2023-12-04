@@ -8,5 +8,6 @@ from q_transformer.q_learner import (
 )
 
 from q_transformer.agent import (
-    Agent
+    Agent,
+    ReplayMemoryDataset
 )

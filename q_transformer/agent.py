@@ -7,7 +7,7 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 from torch.utils.data import Dataset
 
-from einops import rearrange, repeat, reduce
+from einops import rearrange
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
@@ -17,6 +17,15 @@ from beartype import beartype
 from beartype.typing import Iterator, Tuple
 
 from tqdm import tqdm
+
+# constants
+
+STATES_FILENAME = 'states.memmap.npy'
+ACTIONS_FILENAME = 'actions.memmap.npy'
+REWARDS_FILENAME = 'rewards.memmap.npy'
+DONES_FILENAME = 'dones.memmap.npy'
+
+DEFAULT_REPLAY_MEMORIES_FOLDER = './replay_memories_data'
 
 # helpers
 
@@ -28,30 +37,75 @@ def exists(v):
 class ReplayMemoryDataset(Dataset):
     def __init__(
         self,
-        folder: str,
+        instruction: str,
+        folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,
         num_timesteps = 1
     ):
+        self.instruction = instruction
+
         assert num_timesteps >= 1
         self.is_single_timestep = num_timesteps == 1
+        self.num_timesteps = num_timesteps
 
         folder = Path(folder)
         assert folder.exists() and folder.is_dir()
 
-        states_path = folder / 'states.memmap.npy'
-        actions_path = folder / 'actions.memmap.npy'
-        rewards_path = folder / 'rewards.memmap.npy'
-        dones_path = folder / 'dones.memmap.npy'
+        states_path = folder / STATES_FILENAME
+        actions_path = folder / ACTIONS_FILENAME
+        rewards_path = folder / REWARDS_FILENAME
+        dones_path = folder / DONES_FILENAME
 
         self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')
         self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')
         self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')
         self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'r')
 
+        self.num_timesteps = num_timesteps
+
+        # calculate episode length based on dones
+        # filter out any episodes that are insufficient in length
+
+        self.episode_length = (self.dones.cumsum(axis = -1) == 0).sum(axis = -1) + 1
+
+        trainable_episode_indices = self.episode_length >= num_timesteps
+
+        self.states = self.states[trainable_episode_indices]
+        self.actions = self.actions[trainable_episode_indices]
+        self.rewards = self.rewards[trainable_episode_indices]
+        self.dones = self.dones[trainable_episode_indices]
+
+        self.episode_length = self.episode_length[trainable_episode_indices]
+
+        assert self.dones.size > 0, 'no trainable episodes'
+
+        self.num_episodes, self.max_episode_len = self.dones.shape
+
+        timestep_arange = torch.arange(self.max_episode_len)
+
+        timestep_indices = torch.stack(torch.meshgrid(
+            torch.arange(self.num_episodes),
+            timestep_arange
+        ), dim = -1)
+
+        trainable_mask = timestep_arange < rearrange(torch.from_numpy(self.episode_length) - num_timesteps, 'e -> e 1')
+        self.indices = timestep_indices[trainable_mask]
+
     def __len__(self):
-        raise NotImplementedError
+        return self.indices.shape[0]
 
     def __getitem__(self, idx):
-        raise NotImplementedError
+        episode_index, timestep_index = self.indices[idx]
+
+        timestep_slice = slice(timestep_index, (timestep_index + self.num_timesteps))
+
+        states = self.states[episode_index, timestep_slice]
+        actions = self.actions[episode_index, timestep_slice]
+        rewards = self.rewards[episode_index, timestep_slice]
+        dones = self.dones[episode_index, timestep_slice]
+
+        next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)]
+
+        return self.instruction, states, actions, next_state, rewards, dones
 
 # base environment class to extend
 
@@ -90,7 +144,7 @@ class Agent(Module):
         q_transformer: QRoboticTransformer,
         *,
         environment: BaseEnvironment,
-        memories_dataset_folder: str = './replay_memories_data',
+        memories_dataset_folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,
         num_episodes: int = 1000,
         max_num_steps_per_episode: int = 10000,
         epsilon_start: float = 0.25,
@@ -119,10 +173,10 @@ class Agent(Module):
         mem_path.mkdir(exist_ok = True, parents = True)
         assert mem_path.is_dir()
 
-        states_path = mem_path / 'states.memmap.npy'
-        actions_path = mem_path / 'actions.memmap.npy'
-        rewards_path = mem_path / 'rewards.memmap.npy'
-        dones_path = mem_path / 'dones.memmap.npy'
+        states_path = mem_path / STATES_FILENAME
+        actions_path = mem_path / ACTIONS_FILENAME
+        rewards_path = mem_path / REWARDS_FILENAME
+        dones_path = mem_path / DONES_FILENAME
 
         prec_shape = (num_episodes, max_num_steps_per_episode)
         num_actions = q_transformer.num_actions
@@ -182,4 +236,4 @@ class Agent(Module):
             self.rewards.flush()
             self.dones.flush()
 
-        print(f'completed, memories stored to {str(self.memories_dataset_folder)}')
+        print(f'completed, memories stored to {self.memories_dataset_folder.resolve()}')
