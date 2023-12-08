@@ -1030,6 +1030,7 @@ class QRoboticTransformer(Module):
         self,
         video: Tensor,
         texts: Optional[Union[List[str], Tuple[str]]] = None,
+        text_embeds: Optional[Tensor] = None,
         actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
     ):
@@ -1042,9 +1043,12 @@ class QRoboticTransformer(Module):
         w - width
         n - number of learned tokens
         """
+        assert exists(texts) ^ exists(text_embeds)
 
         if exists(texts) and isinstance(texts, tuple):
             texts = list(texts)
+
+        text_cond_kwargs = dict(texts = texts, text_embeds = text_embeds)
 
         depth = self.transformer_depth
         cond_drop_prob = default(cond_drop_prob, self.cond_drop_prob)
@@ -1052,7 +1056,7 @@ class QRoboticTransformer(Module):
         frames, device = video.shape[2], video.device
 
         cond_fns, _ = self.conditioner(
-            texts,
+            **text_cond_kwargs,
             cond_drop_prob = cond_drop_prob,
             repeat_batch = (*((frames,) * self.num_vit_stages), *((1,) * self.transformer_depth * 2))
         )
@@ -1098,6 +1102,7 @@ class QRoboticTransformer(Module):
         self,
         video: Tensor,
         texts: Optional[List[str]] = None,
+        text_embeds: Optional[Tensor] = None,
         actions: Optional[Tensor] = None,
         cond_drop_prob = 0.,
     ):
@@ -1105,6 +1110,7 @@ class QRoboticTransformer(Module):
         encoded_state = self.encode_state(
             video = video,
             texts = texts,
+            text_embeds = text_embeds,
             actions = actions,
             cond_drop_prob = cond_drop_prob
         )
