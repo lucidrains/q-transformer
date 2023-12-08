@@ -27,12 +27,12 @@ I will be keeping around the logic for Q-learning on single action just for fina
     - [x] `ReplayDataset` that takes in folder
         - [x] 1 time step option
         - [x] n-time steps
+- [x] handle multiple instructions correctly
 
 - [ ] show a simple end-to-end example, in the same style as all other repos
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
-
-- [ ] handle multiple instructions correctly, but also handle no instructions, in case one wants to train a robot doing a single specialized task
+- [ ] handle no instructions, leverage null conditioner in CFG library
 - [ ] for exploration, allow for finely randomizing a subset of actions, and not all actions at once
 - [ ] figure out if one can train with randomized orders of actions - order could be sent as a conditioning that is concatted or summed before attention layers
     - [ ] offer an improvised variant where the first action token suggests the action ordering. all actions aren't made equal, and some may need to attend to past actions more than others

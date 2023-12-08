@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 # constants
 
+TEXT_EMBEDS_FILENAME = 'text_embeds.memmap.npy'
 STATES_FILENAME = 'states.memmap.npy'
 ACTIONS_FILENAME = 'actions.memmap.npy'
 REWARDS_FILENAME = 'rewards.memmap.npy'
@@ -35,14 +36,12 @@ def exists(v):
 # replay memory dataset
 
 class ReplayMemoryDataset(Dataset):
+    @beartype
     def __init__(
         self,
-        instruction: str,
         folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,
-        num_timesteps = 1
+        num_timesteps: int = 1
     ):
-        self.instruction = instruction
-
         assert num_timesteps >= 1
         self.is_single_timestep = num_timesteps == 1
         self.num_timesteps = num_timesteps
@@ -50,11 +49,13 @@ class ReplayMemoryDataset(Dataset):
         folder = Path(folder)
         assert folder.exists() and folder.is_dir()
 
+        text_embeds_path = folder / TEXT_EMBEDS_FILENAME
         states_path = folder / STATES_FILENAME
         actions_path = folder / ACTIONS_FILENAME
         rewards_path = folder / REWARDS_FILENAME
         dones_path = folder / DONES_FILENAME
 
+        self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'r')
         self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')
         self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')
         self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')
@@ -69,6 +70,7 @@ class ReplayMemoryDataset(Dataset):
 
         trainable_episode_indices = self.episode_length >= num_timesteps
 
+        self.text_embeds = self.text_embeds[trainable_episode_indices]
         self.states = self.states[trainable_episode_indices]
         self.actions = self.actions[trainable_episode_indices]
         self.rewards = self.rewards[trainable_episode_indices]
@@ -98,6 +100,7 @@ class ReplayMemoryDataset(Dataset):
 
         timestep_slice = slice(timestep_index, (timestep_index + self.num_timesteps))
 
+        text_embeds = self.text_embeds[episode_index, timestep_slice]
         states = self.states[episode_index, timestep_slice]
         actions = self.actions[episode_index, timestep_slice]
         rewards = self.rewards[episode_index, timestep_slice]
@@ -105,17 +108,19 @@ class ReplayMemoryDataset(Dataset):
 
         next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)]
 
-        return self.instruction, states, actions, next_state, rewards, dones
+        return text_embeds, states, actions, next_state, rewards, dones
 
 # base environment class to extend
 
 class BaseEnvironment(Module):
     def __init__(
         self,
-        state_shape: Tuple[int, ...] = ()
+        state_shape: Tuple[int, ...] = tuple(),
+        text_embed_shape: Tuple[int, ...] = tuple()
     ):
         super().__init__()
         self.state_shape = state_shape
+        self.text_embed_shape = text_embed_shape
         self.register_buffer('dummy', torch.zeros(0), persistent = False)
 
     @property
@@ -155,6 +160,8 @@ class Agent(Module):
         self.q_transformer = q_transformer
         self.environment = environment
 
+        assert hasattr(environment, 'state_shape') and hasattr(environment, 'text_embed_shape')
+
         assert 0. <= epsilon_start <= 1.
         assert 0. <= epsilon_end <= 1.
         assert epsilon_start >= epsilon_end
@@ -173,6 +180,7 @@ class Agent(Module):
         mem_path.mkdir(exist_ok = True, parents = True)
         assert mem_path.is_dir()
 
+        text_embeds_path = mem_path / TEXT_EMBEDS_FILENAME
         states_path = mem_path / STATES_FILENAME
         actions_path = mem_path / ACTIONS_FILENAME
         rewards_path = mem_path / REWARDS_FILENAME
@@ -182,10 +190,14 @@ class Agent(Module):
         num_actions = q_transformer.num_actions
         state_shape = environment.state_shape
 
-        self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
-        self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
-        self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
-        self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
+        text_embed_shape = environment.text_embed_shape
+        self.text_embed_shape = text_embed_shape
+
+        self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))
+        self.states      = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
+        self.actions     = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
+        self.rewards     = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
+        self.dones       = open_memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
 
     def get_epsilon(self, step):
         return max(self.epsilon_end, self.epsilon_slope * float(step) + self.epsilon_start)
@@ -205,9 +217,11 @@ class Agent(Module):
 
                 epsilon = self.get_epsilon(step)
 
+                text_embed = self.q_transformer.embed_texts([instruction])
+
                 actions = self.q_transformer.get_actions(
                     rearrange(curr_state, '... -> 1 ...'),
-                    [instruction],
+                    text_embeds = text_embed,
                     prob_random_action = epsilon
                 )
 
@@ -217,10 +231,13 @@ class Agent(Module):
 
                 # store memories using memmap, for later reflection and learning
 
-                self.states[episode, step] = curr_state
-                self.actions[episode, step] = actions
-                self.rewards[episode, step] = reward
-                self.dones[episode, step] = done
+                assert text_embed.shape[1:] == self.text_embed_shape
+
+                self.text_embeds[episode, step] = text_embed
+                self.states[episode, step]      = curr_state
+                self.actions[episode, step]     = actions
+                self.rewards[episode, step]     = reward
+                self.dones[episode, step]       = done
 
                 # if done, move onto next episode
 
@@ -231,6 +248,7 @@ class Agent(Module):
 
                 curr_state = next_state
 
+            self.text_embeds.flush()
             self.states.flush()
             self.actions.flush()
             self.rewards.flush()

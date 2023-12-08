@@ -52,13 +52,6 @@ def default(val, d):
 def is_divisible(num, den):
     return (num % den) == 0
 
-def repeat_tuple_el(t: Tuple, i: int) -> Tuple:
-    out = []
-    for el in t:
-        for _ in range(i):
-            out.append(el)
-    return tuple(out)
-
 def pack_one(t, pattern):
     return pack([t], pattern)
 
@@ -263,7 +256,7 @@ class QLearner(Module):
 
     def q_learn(
         self,
-        instructions:   Tuple[str],
+        text_embeds:    TensorType['b', 'd', float],
         states:         TensorType['b', 'c', 'f', 'h', 'w', float],
         actions:        TensorType['b', int],
         next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
@@ -281,13 +274,13 @@ class QLearner(Module):
         # first make a prediction with online q robotic transformer
         # select out the q-values for the action that was taken
 
-        q_pred_all_actions = self.model(states, instructions)
+        q_pred_all_actions = self.model(states, text_embeds = text_embeds)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
 
         # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch
         # the max Q value is taken as the optimal action is implicitly the one with the highest Q score
 
-        q_next = self.ema_model(next_states, instructions).amax(dim = -1)
+        q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
         # Bellman's equation. most important line of code, hopefully done correctly
@@ -305,7 +298,7 @@ class QLearner(Module):
 
     def n_step_q_learn(
         self,
-        instructions:   Tuple[str],
+        text_embeds:    TensorType['b', 'd', float],
         states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
         actions:        TensorType['b', 't', int],
         next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
@@ -326,6 +319,7 @@ class QLearner(Module):
         t - timesteps
         a - action bins
         q - q values
+        d - text cond dimension
         """
 
         num_timesteps, device = states.shape[1], states.device
@@ -333,10 +327,11 @@ class QLearner(Module):
         # fold time steps into batch
 
         states, time_ps = pack_one(states, '* c f h w')
+        text_embeds, _ = pack_one(text_embeds, '* d')
 
-        # repeat instructions per timestep
+        # repeat text embeds per timestep
 
-        repeated_instructions = repeat_tuple_el(instructions, num_timesteps)
+        repeated_text_embeds = repeat(text_embeds, 'b ... -> (b n) ...', n = num_timesteps)
 
         γ = self.discount_factor_gamma
 
@@ -351,11 +346,11 @@ class QLearner(Module):
 
         actions = rearrange(actions, 'b t -> (b t)')
 
-        q_pred_all_actions = self.model(states, repeated_instructions)
+        q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '*')
 
-        q_next = self.ema_model(next_states, instructions).amax(dim = -1)
+        q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
         # prepare rewards and discount factors across timesteps
@@ -380,7 +375,7 @@ class QLearner(Module):
 
     def autoregressive_q_learn_handle_single_timestep(
         self,
-        instructions,
+        text_embeds,
         states,
         actions,
         next_states,
@@ -405,11 +400,11 @@ class QLearner(Module):
         if dones.ndim == 1:
             dones = rearrange(dones, 'b -> b 1')
 
-        return self.autoregressive_q_learn(instructions, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
+        return self.autoregressive_q_learn(text_embeds, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
 
     def autoregressive_q_learn(
         self,
-        instructions:   Tuple[str],
+        text_embeds:    TensorType['b', 'd', float],
         states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
         actions:        TensorType['b', 't', 'n', int],
         next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
@@ -431,6 +426,7 @@ class QLearner(Module):
         n - number of actions
         a - action bins
         q - q values
+        d - text cond dimension
         """
         monte_carlo_return = default(monte_carlo_return, -1e4)
         num_timesteps, device = states.shape[1], states.device
@@ -439,10 +435,11 @@ class QLearner(Module):
 
         states, time_ps = pack_one(states, '* c f h w')
         actions, _ = pack_one(actions, '* n')
+        text_embeds, _ = pack_one(text_embeds, '* d')
 
-        # repeat instructions per timestep
+        # repeat text embeds per timestep
 
-        repeated_instructions = repeat_tuple_el(instructions, num_timesteps)
+        repeated_text_embeds = repeat(text_embeds, 'b ... -> (b n) ...', n = num_timesteps)
 
         # anything after the first done flag will be considered terminal
 
@@ -462,20 +459,20 @@ class QLearner(Module):
         # get predicted Q for each action
         # unpack back to (b, t, n)
 
-        q_pred_all_actions = self.model(states, repeated_instructions, actions = actions)
+        q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds, actions = actions)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '* n')
 
         # get q_next
 
-        q_next = self.ema_model(next_states, instructions)
+        q_next = self.ema_model(next_states, text_embeds = text_embeds)
         q_next = q_next.max(dim = -1).values
         q_next.clamp_(min = monte_carlo_return)
 
         # get target Q
         # unpack back to - (b, t, n)
 
-        q_target_all_actions = self.ema_model(states, repeated_instructions, actions = actions)
+        q_target_all_actions = self.ema_model(states, text_embeds = repeated_text_embeds, actions = actions)
         q_target = q_target_all_actions.max(dim = -1).values
 
         q_target.clamp_(min = monte_carlo_return)
