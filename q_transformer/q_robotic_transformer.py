@@ -996,6 +996,10 @@ class QRoboticTransformer(Module):
     def get_random_actions(self, batch_size = 1):
         return self.q_head.get_random_actions(batch_size)
 
+    @beartype
+    def embed_texts(self, texts: List[str]):
+        return self.conditioner.embed_texts(texts)
+
     @torch.no_grad()
     def get_optimal_actions(
         self,
@@ -1047,7 +1051,7 @@ class QRoboticTransformer(Module):
 
         frames, device = video.shape[2], video.device
 
-        cond_fns = self.conditioner(
+        cond_fns, _ = self.conditioner(
             texts,
             cond_drop_prob = cond_drop_prob,
             repeat_batch = (*((frames,) * self.num_vit_stages), *((1,) * self.transformer_depth * 2))

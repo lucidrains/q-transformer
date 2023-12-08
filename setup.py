@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'q-transformer',
   packages = find_packages(exclude=[]),
-  version = '0.0.43',
+  version = '0.0.44',
   license='MIT',
   description = 'Q-Transformer',
   author = 'Phil Wang',
@@ -20,7 +20,7 @@ setup(
   install_requires=[
     'accelerate',
     'beartype',
-    'classifier-free-guidance-pytorch>=0.1.4',
+    'classifier-free-guidance-pytorch>=0.4.0',
     'einops>=0.7.0',
     'ema-pytorch>=0.3.1',
     'numpy',
