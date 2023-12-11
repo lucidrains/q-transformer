@@ -1,6 +1,6 @@
 <img src="./q-transformer.png" width="450px"></img>
 
-## Q-transformer (wip)
+## Q-transformer
 
 Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, Scalable Offline Reinforcement Learning via Autoregressive Q-Functions, out of Google Deepmind
 
