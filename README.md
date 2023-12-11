@@ -6,6 +6,95 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 
 I will be keeping around the logic for Q-learning on single action just for final comparison with the proposed autoregressive Q-learning on multiple actions. Also to serve as education for myself and the public.
 
+## Install
+
+```bash
+$ pip install q-transformer
+```
+
+## Usage
+
+```python
+import torch
+
+from q_transformer import (
+    QRoboticTransformer,
+    QLearner,
+    Agent,
+    ReplayMemoryDataset
+)
+
+
+model = QRoboticTransformer(
+    vit = dict(
+        num_classes = 1000,
+        dim_conv_stem = 64,
+        dim = 64,
+        dim_head = 64,
+        depth = (2, 2, 5, 2),
+        window_size = 7,
+        mbconv_expansion_rate = 4,
+        mbconv_shrinkage_rate = 0.25,
+        dropout = 0.1
+    ),
+    num_actions = 8,
+    action_bins = 256,
+    depth = 1,
+    heads = 8,
+    dim_head = 64,
+    cond_drop_prob = 0.2,
+    dueling = True
+)
+
+# you need to supply your own environment, by overriding BaseEnvironment
+
+from q_transformer.mocks import MockEnvironment
+
+env = MockEnvironment(
+    state_shape = (3, 6, 224, 224),
+    text_embed_shape = (768,)
+)
+
+# env.init()     should return instructions and initial state: Tuple[str, Tensor[*state_shape]]
+# env(actions)   should return rewards, next state, and done flag: Tuple[Tensor[()], Tensor[*state_shape], Tensor[()]]
+
+# agent loop
+
+agent = Agent(
+    model,
+    environment = env,
+    num_episodes = 2,
+    max_num_steps_per_episode = 5,
+)
+
+agent()
+
+# Q learning
+
+q_learner = QLearner(
+    model,
+    dataset = ReplayMemoryDataset(),
+    num_train_steps = 10000,
+    learning_rate = 3e-4,
+    batch_size = 1
+)
+
+q_learner()
+
+# after much learning
+# your robot should be better at selecting optimal actions
+
+video = torch.randn(2, 3, 6, 224, 224)
+
+instructions = [
+    'bring me that apple sitting on the table',
+    'please pass the butter'
+]
+
+actions = model.get_optimal_actions(video, instructions)
+
+```
+
 ## Appreciation
 
 - <a href="https://stability.ai/">StabilityAI</a>, <a href="https://a16z.com/supporting-the-open-source-ai-community/">A16Z Open Source AI Grant Program</a>, and <a href="https://huggingface.co/">🤗 Huggingface</a> for the generous sponsorships, as well as my other sponsors, for affording me the independence to open source current artificial intelligence research
@@ -28,8 +117,8 @@ I will be keeping around the logic for Q-learning on single action just for fina
         - [x] 1 time step option
         - [x] n-time steps
 - [x] handle multiple instructions correctly
+- [x] show a simple end-to-end example, in the same style as all other repos
 
-- [ ] show a simple end-to-end example, in the same style as all other repos
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 - [ ] handle no instructions, leverage null conditioner in CFG library
