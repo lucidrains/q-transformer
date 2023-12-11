@@ -14,7 +14,7 @@ from q_transformer.q_robotic_transformer import QRoboticTransformer
 from torchtyping import TensorType
 
 from beartype import beartype
-from beartype.typing import Iterator, Tuple
+from beartype.typing import Iterator, Tuple, Union
 
 from tqdm import tqdm
 
@@ -32,6 +32,9 @@ DEFAULT_REPLAY_MEMORIES_FOLDER = './replay_memories_data'
 
 def exists(v):
     return v is not None
+
+def cast_tuple(t):
+    return (t,) if not isinstance(t, tuple) else t
 
 # replay memory dataset
 
@@ -113,14 +116,16 @@ class ReplayMemoryDataset(Dataset):
 # base environment class to extend
 
 class BaseEnvironment(Module):
+    @beartype
     def __init__(
         self,
-        state_shape: Tuple[int, ...] = tuple(),
-        text_embed_shape: Tuple[int, ...] = tuple()
+        *,
+        state_shape: Tuple[int, ...],
+        text_embed_shape: Union[int, Tuple[int, ...]]
     ):
         super().__init__()
         self.state_shape = state_shape
-        self.text_embed_shape = text_embed_shape
+        self.text_embed_shape = cast_tuple(text_embed_shape)
         self.register_buffer('dummy', torch.zeros(0), persistent = False)
 
     @property
