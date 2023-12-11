@@ -16,7 +16,12 @@ from einops.layers.torch import Rearrange, Reduce
 
 from q_transformer.attend import Attend
 
-from classifier_free_guidance_pytorch import TextConditioner, AttentionTextConditioner, classifier_free_guidance
+from classifier_free_guidance_pytorch import (
+    TextConditioner,
+    AttentionTextConditioner,
+    NullConditioner,
+    classifier_free_guidance
+)
 
 # helpers
 
@@ -911,6 +916,7 @@ class QRoboticTransformer(Module):
         conditioner_kwargs: dict = dict(),
         dueling = False,                       # https://arxiv.org/abs/1511.06581
         flash_attn = True,
+        condition_on_text = True,
         q_head_attn_kwargs: dict = dict(
             attn_heads = 8,
             attn_dim_head = 64,
@@ -940,14 +946,19 @@ class QRoboticTransformer(Module):
 
         # conditioning
 
-        conditioner_klass = AttentionTextConditioner if use_attn_conditioner else TextConditioner
+        self.condition_on_text = condition_on_text
 
-        self.conditioner = conditioner_klass(
-            hidden_dims = (*tuple(vit.cond_hidden_dims), *((attend_dim,) * depth * 2)),
-            hiddens_channel_first = (*((True,) * self.num_vit_stages), *((False,) * depth * 2)),
-            cond_drop_prob = cond_drop_prob,
-            **conditioner_kwargs
-        )
+        if condition_on_text:
+            conditioner_klass = AttentionTextConditioner if use_attn_conditioner else TextConditioner
+
+            self.conditioner = conditioner_klass(
+                hidden_dims = (*tuple(vit.cond_hidden_dims), *((attend_dim,) * depth * 2)),
+                hiddens_channel_first = (*((True,) * self.num_vit_stages), *((False,) * depth * 2)),
+                cond_drop_prob = cond_drop_prob,
+                **conditioner_kwargs
+            )
+        else:
+            self.conditioner = NullConditioner(hidden_dims = tuple())
 
         self.token_learner = TokenLearner(
             dim = vit.embed_dim,
@@ -966,7 +977,7 @@ class QRoboticTransformer(Module):
             heads = heads,
             depth = depth,
             flash_attn = flash_attn,
-            adaptive_ln = True,
+            adaptive_ln = condition_on_text,
             final_norm = True
         )
 
@@ -1043,7 +1054,11 @@ class QRoboticTransformer(Module):
         w - width
         n - number of learned tokens
         """
-        assert exists(texts) ^ exists(text_embeds)
+
+        if not self.condition_on_text:
+            assert (not exists(texts) and not exists(text_embeds)), 'neither texts nor text embeds should be passed in'
+        else:
+            assert exists(texts) ^ exists(text_embeds), 'either texts or text embeds must be passed in if conditioning on instructions'
 
         if exists(texts) and isinstance(texts, tuple):
             texts = list(texts)

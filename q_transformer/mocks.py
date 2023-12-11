@@ -3,13 +3,23 @@ from random import randrange
 import torch
 from torch.utils.data import Dataset
 
+from beartype.typing import Tuple, Optional
+
+from torchtyping import TensorType
 from q_transformer.agent import BaseEnvironment
 
 class MockEnvironment(BaseEnvironment):
-    def init(self):
+    def init(self) -> Tuple[
+        Optional[str],
+        TensorType[float]
+    ]:
         return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)
 
-    def forward(self, actions):
+    def forward(self, actions) -> Tuple[
+        TensorType[(), float],
+        TensorType[float],
+        TensorType[(), bool]
+    ]:
         rewards = torch.randn((), device = self.device)
         next_states = torch.randn(self.state_shape, device = self.device)
         done = torch.zeros((), device = self.device, dtype = torch.bool)

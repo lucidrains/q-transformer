@@ -163,6 +163,10 @@ class Agent(Module):
     ):
         super().__init__()
         self.q_transformer = q_transformer
+    
+        condition_on_text = q_transformer.condition_on_text
+        self.condition_on_text = condition_on_text
+
         self.environment = environment
 
         assert hasattr(environment, 'state_shape') and hasattr(environment, 'text_embed_shape')
@@ -185,7 +189,6 @@ class Agent(Module):
         mem_path.mkdir(exist_ok = True, parents = True)
         assert mem_path.is_dir()
 
-        text_embeds_path = mem_path / TEXT_EMBEDS_FILENAME
         states_path = mem_path / STATES_FILENAME
         actions_path = mem_path / ACTIONS_FILENAME
         rewards_path = mem_path / REWARDS_FILENAME
@@ -195,10 +198,13 @@ class Agent(Module):
         num_actions = q_transformer.num_actions
         state_shape = environment.state_shape
 
-        text_embed_shape = environment.text_embed_shape
-        self.text_embed_shape = text_embed_shape
+        if condition_on_text:
+            text_embeds_path = mem_path / TEXT_EMBEDS_FILENAME
+            text_embed_shape = environment.text_embed_shape
 
-        self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))
+            self.text_embed_shape = text_embed_shape
+            self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))
+
         self.states      = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
         self.actions     = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
         self.rewards     = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
@@ -222,7 +228,10 @@ class Agent(Module):
 
                 epsilon = self.get_epsilon(step)
 
-                text_embed = self.q_transformer.embed_texts([instruction])
+                text_embed = None
+
+                if self.condition_on_text:
+                    text_embed = self.q_transformer.embed_texts([instruction])
 
                 actions = self.q_transformer.get_actions(
                     rearrange(curr_state, '... -> 1 ...'),
@@ -236,9 +245,10 @@ class Agent(Module):
 
                 # store memories using memmap, for later reflection and learning
 
-                assert text_embed.shape[1:] == self.text_embed_shape
+                if self.condition_on_text:
+                    assert text_embed.shape[1:] == self.text_embed_shape
+                    self.text_embeds[episode, step] = text_embed
 
-                self.text_embeds[episode, step] = text_embed
                 self.states[episode, step]      = curr_state
                 self.actions[episode, step]     = actions
                 self.rewards[episode, step]     = reward
@@ -253,7 +263,9 @@ class Agent(Module):
 
                 curr_state = next_state
 
-            self.text_embeds.flush()
+            if self.condition_on_text:
+                self.text_embeds.flush()
+
             self.states.flush()
             self.actions.flush()
             self.rewards.flush()
