@@ -536,7 +536,9 @@ class TransformerAttention(Module):
         context = None,
         mask = None,
         attn_mask = None,
-        cond_fn: Optional[Callable] = None
+        cond_fn: Optional[Callable] = None,
+        cache: Optional[Tensor] = None,
+        return_cache = False
     ):
         b = x.shape[0]
 
@@ -558,6 +560,13 @@ class TransformerAttention(Module):
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), (q, k, v))
 
+        if exists(cache):
+            ck, cv = cache
+            k = torch.cat((ck, k), dim = -2)
+            v = torch.cat((cv, v), dim = -2)
+
+        new_kv_cache = torch.stack((k, v))
+
         if exists(self.mem_kv):
             mk, mv = map(lambda t: repeat(t, '... -> b ...', b = b), self.mem_kv)
 
@@ -573,7 +582,12 @@ class TransformerAttention(Module):
         out = self.attend(q, k, v, mask = mask, attn_mask = attn_mask)
 
         out = rearrange(out, 'b h n d -> b n (h d)')
-        return self.to_out(out)
+        out = self.to_out(out)
+
+        if not return_cache:
+            return out
+
+        return out, new_kv_cache
 
 class Transformer(Module):
     def __init__(
@@ -616,20 +630,50 @@ class Transformer(Module):
         x,
         cond_fns: Optional[Tuple[Callable, ...]] = None,
         attn_mask = None,
-        context: Optional[Tensor] = None
+        context: Optional[Tensor] = None,
+        cache: Optional[Tensor] = None,
+        return_cache = False
     ):
+        has_cache = exists(cache)
+
+        if has_cache:
+            x_prev, x = x[..., :-1, :], x[..., -1:, :]
+
         cond_fns = iter(default(cond_fns, []))
+        cache = iter(default(cache, []))
+
+        new_caches = []
 
         for attn, maybe_cross_attn, ff in self.layers:
-             x = attn(x, attn_mask = attn_mask, cond_fn = next(cond_fns, None)) + x
+            attn_out, new_cache = attn(
+                x,
+                attn_mask = attn_mask,
+                cond_fn = next(cond_fns, None),
+                return_cache = True,
+                cache = next(cache, None)
+            )
 
-             if exists(maybe_cross_attn):
+            new_caches.append(new_cache)
+
+            x = x + attn_out
+
+            if exists(maybe_cross_attn):
                 assert exists(context)
                 x = maybe_cross_attn(x, context = context) + x
 
-             x = ff(x, cond_fn = next(cond_fns, None)) + x
+            x = ff(x, cond_fn = next(cond_fns, None)) + x
 
-        return self.norm(x)
+        new_caches = torch.stack(new_caches)
+
+        if has_cache:
+            x = torch.cat((x_prev, x), dim = -2)
+
+        out = self.norm(x)
+
+        if not return_cache:
+            return out
+
+        return out, new_caches
 
 # token learner module
 
@@ -847,9 +891,16 @@ class QHeadMultipleActions(Module):
         tokens = self.maybe_append_actions(sos_token, actions = actions)
 
         action_bins = []
+        cache = None
 
         for action_idx in range(self.num_actions):
-            embed = self.transformer(tokens, context = encoded_state)
+
+            embed, cache = self.transformer(
+                tokens,
+                context = encoded_state,
+                cache = cache,
+                return_cache = True
+            )
 
             last_embed = embed[:, action_idx]
             bin_embeddings = self.action_bin_embeddings[action_idx]

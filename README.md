@@ -120,13 +120,13 @@ actions = model.get_optimal_actions(video, instructions)
 - [x] handle multiple instructions correctly
 - [x] show a simple end-to-end example, in the same style as all other repos
 - [x] handle no instructions, leverage null conditioner in CFG library
+- [x] cache kv for action decoding
 
 - [ ] consult some RL experts and figure out if there are any new headways into resolving <a href="https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf">delusional bias</a>
 - [ ] for exploration, allow for finely randomizing a subset of actions, and not all actions at once
 - [ ] figure out if one can train with randomized orders of actions - order could be sent as a conditioning that is concatted or summed before attention layers
     - [ ] offer an improvised variant where the first action token suggests the action ordering. all actions aren't made equal, and some may need to attend to past actions more than others
 - [ ] simple beam search function for optimal actions
-- [ ] cache kv for action decoding
 - [ ] improvise cross attention to past actions and states of timestep, transformer-xl fashion (w/ structured memory dropout)
 - [ ] see if the main idea in this paper is applicable to language models <a href="https://github.com/lucidrains/llama-qrlhf">here</a>
 
