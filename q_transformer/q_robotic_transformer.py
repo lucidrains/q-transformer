@@ -873,7 +873,7 @@ class QHeadMultipleActions(Module):
         else:
             # each token predicts next action bin
             action_bin_embeddings = self.action_bin_embeddings[:num_actions]
-            action_bin_embeddings = torch.roll(action_bin_embeddings, shifts = 1, dims = 1)
+            action_bin_embeddings = torch.roll(action_bin_embeddings, shifts = -1, dims = 1)
             logits = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
 
         if self.dueling:
