@@ -813,7 +813,8 @@ class QHeadMultipleActions(Module):
         attn_depth = 2,
         attn_dim_head = 32,
         attn_heads = 8,
-        dueling = False
+        dueling = False,
+        weight_tie_action_bin_embed = False
     ):
         super().__init__()
         self.num_actions = num_actions
@@ -821,6 +822,10 @@ class QHeadMultipleActions(Module):
 
         self.action_bin_embeddings = nn.Parameter(torch.zeros(num_actions, action_bins, dim))
         nn.init.normal_(self.action_bin_embeddings, std = 0.02)
+
+        self.to_q_values = None
+        if not weight_tie_action_bin_embed:
+            self.to_q_values = nn.Linear(dim, action_bins)
 
         self.transformer = Transformer(
             dim = dim,
@@ -862,17 +867,23 @@ class QHeadMultipleActions(Module):
 
     def get_q_values(self, embed):
         num_actions = embed.shape[-2]
-        action_bin_embeddings = self.action_bin_embeddings[:num_actions]
+
+        if exists(self.to_q_values):
+            logits = self.to_q_values(embed)
+        else:
+            # each token predicts next action bin
+            action_bin_embeddings = self.action_bin_embeddings[:num_actions]
+            action_bin_embeddings = torch.roll(action_bin_embeddings, shifts = 1, dims = 1)
+            logits = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
 
         if self.dueling:
-            advantages = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
-
+            advantages = logits
             values = einsum('b n d, n d -> b n', embed, self.to_values[:num_actions])
             values = rearrange(values, 'b n -> b n 1')
 
             q_values = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
         else:
-            q_values = einsum('b n d, n a d -> b n a', embed, action_bin_embeddings)
+            q_values = logits
 
         return q_values.sigmoid()
 
@@ -994,7 +1005,8 @@ class QRoboticTransformer(Module):
             attn_heads = 8,
             attn_dim_head = 64,
             attn_depth = 2
-        )
+        ),
+        weight_tie_action_bin_embed = True      # when projecting to action bin Q values, whether to weight tie to original embeddings
     ):
         super().__init__()
 
@@ -1070,6 +1082,7 @@ class QRoboticTransformer(Module):
                 attend_dim,
                 action_bins = action_bins,
                 dueling = dueling,
+                weight_tie_action_bin_embed = weight_tie_action_bin_embed,
                 **q_head_attn_kwargs
             )
 
