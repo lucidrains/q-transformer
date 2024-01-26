@@ -103,13 +103,13 @@ class ReplayMemoryDataset(Dataset):
 
         timestep_slice = slice(timestep_index, (timestep_index + self.num_timesteps))
 
-        text_embeds = self.text_embeds[episode_index, timestep_slice]
-        states = self.states[episode_index, timestep_slice]
-        actions = self.actions[episode_index, timestep_slice]
-        rewards = self.rewards[episode_index, timestep_slice]
-        dones = self.dones[episode_index, timestep_slice]
+        text_embeds = self.text_embeds[episode_index, timestep_slice].copy()
+        states = self.states[episode_index, timestep_slice].copy()
+        actions = self.actions[episode_index, timestep_slice].copy()
+        rewards = self.rewards[episode_index, timestep_slice].copy()
+        dones = self.dones[episode_index, timestep_slice].copy()
 
-        next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)]
+        next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)].copy()
 
         return text_embeds, states, actions, next_state, rewards, dones
 
