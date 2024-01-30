@@ -887,9 +887,9 @@ class QHeadMultipleActions(Module):
 
         return q_values.sigmoid()
 
-    def get_random_actions(self, batch_size, num_action_bins = None):
-        num_action_bins = default(num_action_bins, self.action_bins)
-        return torch.randint(0, num_action_bins, (batch_size, num_action_bins), device = self.device)
+    def get_random_actions(self, batch_size, num_actions = None):
+        num_actions = default(num_actions, self.num_actions)
+        return torch.randint(0, self.action_bins, (batch_size, num_actions), device = self.device)
 
     @torch.no_grad()
     def get_optimal_actions(
@@ -904,11 +904,10 @@ class QHeadMultipleActions(Module):
         batch = encoded_state.shape[0]
 
         if prob_random_action == 1:
-            return self.get_random_actions(self, batch)
+            return self.get_random_actions(batch)
 
         sos_token = reduce(encoded_state, 'b ... d -> b 1 d', 'mean')
         tokens = self.maybe_append_actions(sos_token, actions = actions)
-
 
         action_bins = []
         cache = None
