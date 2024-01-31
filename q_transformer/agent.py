@@ -269,11 +269,11 @@ class Agent(Module):
                 curr_state = next_state
 
             if self.condition_on_text:
-                self.text_embeds.flush()
+                del self.text_embeds
 
-            self.states.flush()
-            self.actions.flush()
-            self.rewards.flush()
-            self.dones.flush()
+            del self.states
+            del self.actions
+            del self.rewards
+            del self.dones
 
         print(f'completed, memories stored to {self.memories_dataset_folder.resolve()}')

@@ -64,8 +64,8 @@ env = MockEnvironment(
 agent = Agent(
     model,
     environment = env,
-    num_episodes = 10000,
-    max_num_steps_per_episode = 1000,
+    num_episodes = 1000,
+    max_num_steps_per_episode = 100,
 )
 
 agent()
@@ -77,7 +77,8 @@ q_learner = QLearner(
     dataset = ReplayMemoryDataset(),
     num_train_steps = 10000,
     learning_rate = 3e-4,
-    batch_size = 32
+    batch_size = 4,
+    grad_accum_every = 16,
 )
 
 q_learner()
