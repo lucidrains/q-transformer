@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from numpy.lib.format import open_memmap
@@ -17,6 +18,10 @@ from beartype import beartype
 from beartype.typing import Iterator, Tuple, Union
 
 from tqdm import tqdm
+
+# just force training on 64 bit systems
+
+assert sys.maxsize > (2 ** 32), 'you need to be on 64 bit system to store > 2GB experience for your q-transformer agent'
 
 # constants
 
