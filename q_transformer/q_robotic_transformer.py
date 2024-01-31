@@ -1207,6 +1207,15 @@ class QRoboticTransformer(Module):
         cond_drop_prob = 0.,
     ):
 
+        # just auto-move inputs to the same device as robotic transformer
+
+        video = video.to(self.device)
+
+        if exists(actions):
+            actions = actions.to(self.device)
+
+        # encoding state
+
         encoded_state = self.encode_state(
             video = video,
             texts = texts,
