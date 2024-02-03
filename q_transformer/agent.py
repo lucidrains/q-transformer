@@ -206,7 +206,6 @@ class Agent(Module):
         if condition_on_text:
             text_embeds_path = mem_path / TEXT_EMBEDS_FILENAME
             text_embed_shape = environment.text_embed_shape
-
             self.text_embed_shape = text_embed_shape
             self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))
 
@@ -269,11 +268,21 @@ class Agent(Module):
                 curr_state = next_state
 
             if self.condition_on_text:
-                del self.text_embeds
+                self.text_embeds.flush()
 
-            del self.states
-            del self.actions
-            del self.rewards
-            del self.dones
+            self.states.flush()
+            self.actions.flush()
+            self.rewards.flush()
+            self.dones.flush()
+
+        # close memmap
+
+        if self.condition_on_text:
+            del self.text_embeds
+
+        del self.states
+        del self.actions
+        del self.rewards
+        del self.dones
 
         print(f'completed, memories stored to {self.memories_dataset_folder.resolve()}')
