@@ -347,6 +347,7 @@ class MaxViT(Module):
         heads = 8,
         dim_head = 64,
         dim_conv_stem = None,
+        conv_stem_downsample = True,
         window_size = 7,
         mbconv_expansion_rate = 4,
         mbconv_shrinkage_rate = 0.25,
@@ -356,14 +357,22 @@ class MaxViT(Module):
         flash_attn = True
     ):
         super().__init__()
+
+        self.depth = depth
+
         # convolutional stem
 
         dim_conv_stem = default(dim_conv_stem, dim)
 
-        self.conv_stem = nn.Sequential(
-            nn.Conv2d(channels, dim_conv_stem, 3, stride = 2, padding = 1),
-            nn.Conv2d(dim_conv_stem, dim_conv_stem, 3, padding = 1)
-        )
+        self.conv_stem_downsample = conv_stem_downsample
+
+        if conv_stem_downsample:
+            self.conv_stem = nn.Sequential(
+                nn.Conv2d(channels, dim_conv_stem, 3, stride = 2, padding = 1),
+                nn.Conv2d(dim_conv_stem, dim_conv_stem, 3, padding = 1)
+            )
+        else:
+            self.conv_stem = nn.Conv2d(channels, dim_conv_stem, 7, padding = 3)
 
         # variables
 
@@ -433,6 +442,10 @@ class MaxViT(Module):
             nn.Linear(embed_dim, num_classes)
         )
 
+    @property
+    def downsample_factor(self):
+        return (2 if self.conv_stem_downsample else 1) * (2 ** len(self.depth))
+
     @beartype
     def forward(
         self,
@@ -442,7 +455,9 @@ class MaxViT(Module):
         cond_drop_prob = 0.,
         return_embeddings = False
     ):
-        assert all([divisible_by(d, self.window_size) for d in img.shape[-2:]])
+        hw = img.shape[-2:]
+        assert all([divisible_by(d, self.window_size) for d in hw]), f'height and width of video frames {tuple(hw)} must be divisible by window size {self.window_size}'
+        assert all([divisible_by(d, self.downsample_factor) for d in hw]), f'height and width of video frames {tuple(hw)} must be divisible by total downsample factor {self.downsample_factor}'
 
         x = self.conv_stem(img)
 
