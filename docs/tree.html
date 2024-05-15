@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="github-markdown.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <title>Project structure of: lucidrains/q-transformer</title>
+    <style>
+        .directory:hover {
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        :target {
+            background-color: yellow !important;
+        }
+
+        .folded::before {
+            content: '\25B6';
+            margin-right: 8px;
+            /* Add space between marker and text */
+        }
+
+        .expanded::before {
+            content: '\25BC';
+            margin-right: 8px;
+            /* Add space between marker and text */
+        }
+    </style>
+    <script>
+        function toggleVisibility(element) {
+            let mclass = element.getAttribute("class");
+            if (mclass == "expanded") {
+                element.setAttribute('class', 'folded');
+            } else {
+                element.setAttribute('class', 'expanded');
+            }
+            const siblings = element.parentNode.children;
+            for (const sibling of siblings) {
+                if (sibling !== element) {
+                    sibling.style.display = (sibling.style.display === 'none') ? 'block' : 'none';
+                }
+            }
+        }
+    </script>
+    <style>
+        .markdown-body {
+            box-sizing: border-box;
+            min-width: 200px;
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 45px;
+        }
+
+        @media (max-width: 767px) {
+            .markdown-body {
+                padding: 15px;
+            }
+
+            .partial-repository-url {
+                display: none;
+            }
+        }
+
+        ul {
+            list-style: none;
+        }
+        #feeling-lucky:hover{
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <article class="markdown-body">
+        <h2>Project structure<span hierarchy="0" class="partial-repository-url"> of: lucidrains/q-transformer</span><div style="float: right;"><a title="Document index" style="margin:3.5px;" href="index.html"><i class="bi bi-search"></i></a><a title="Feeling lucky" style="margin:3.5px;" id="feeling-lucky" href="#"><i class="bi bi-dice-3"></i></a><a title="Expand tree" style="margin:3.5px;" href="tree.html?full=true" id="expand-tree"><i class="bi bi-caret-down-square"></i></a></div></h2>
+<ul>
+<li><span hierarchy="0" class="expanded" onclick="toggleVisibility(this)" ><strong class="directory" id="/"><code>q-transformer</code></strong> <em>Robotic action prediction, reinforcement learning, Python package setup.</em></span><ul>
+<li><span hierarchy="1" class="expanded" onclick="toggleVisibility(this)" ><strong class="directory" id="/q_transformer/"><code>q&UnderBar;transformer</code></strong> <em>Q-Transformer: Robotic action prediction using RL</em></span><ul>
+<li><a class="file_link" href="index.html?q=/q_transformer/__init__.py" id="/q_transformer/__init__.py"><code>&UnderBar;&UnderBar;init&UnderBar;&UnderBar;&period;py</code></a> <em>Transformer-based RL architecture import.</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/agent.py" id="/q_transformer/agent.py"><code>agent&period;py</code></a> <em>Trains Q-Transformer agent in RL tasks, handles memories and epsilons.</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/attend.py" id="/q_transformer/attend.py"><code>attend&period;py</code></a> <em>Attention-based neural network class with dropout, flash attention</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/mocks.py" id="/q_transformer/mocks.py"><code>mocks&period;py</code></a> <em>Mock environments and datasets for Q-transformer models in reinforcement learning.</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/optimizer.py" id="/q_transformer/optimizer.py"><code>optimizer&period;py</code></a> <em>Separates parameters, gets Adam or AdamW optimizer.</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/q_learner.py" id="/q_transformer/q_learner.py"><code>q&UnderBar;learner&period;py</code></a> <em>Robotic Transformer Q-Learner for Reinforcement Learning</em></li>
+<li><a class="file_link" href="index.html?q=/q_transformer/q_robotic_transformer.py" id="/q_transformer/q_robotic_transformer.py"><code>q&UnderBar;robotic&UnderBar;transformer&period;py</code></a> <em>Q-Transformer for robotic action prediction</em></li>
+</ul>
+</li>
+<li><a class="file_link" href="index.html?q=/README.md" id="/README.md"><code>README&period;md</code></a> <em>Install Q-Transformer model for scalable offline RL with diverse action decoding.</em></li>
+<li><a class="file_link" href="index.html?q=/setup.py" id="/setup.py"><code>setup&period;py</code></a> <em>Setup file for Python package "q-transformer" with details and deps.</em></li>
+</ul>
+</li>
+</ul>
+    </article>
+    <script type="text/javascript">
+        function getQueryParams() {
+            var search = window.location.search.substring(1); // Remove leading '?'
+            var queryParams = {};
+            search.split('&').forEach(function (pair) {
+                var parts = pair.split('=');
+                var key = decodeURIComponent(parts[0]);
+                var value = decodeURIComponent(parts[1]);
+                queryParams[key] = value;
+            });
+            return queryParams;
+        }
+
+        const queryParams = getQueryParams(window.location.search);
+        const show_full = queryParams.full == "true";
+        //const is_random = queryParams.random == 'true';
+        function feelingLucky() {
+            var elements = document.getElementsByClassName("file_link");
+            var randomIndex = Math.floor(Math.random() * elements.length);
+            window.location = elements[randomIndex].href;
+        }
+        //if (is_random) {feelingLucky();}
+        document.getElementById("feeling-lucky").onclick = feelingLucky;
+        if (!show_full) {
+            const spans = document.querySelectorAll('span');
+            for (let span of spans) {
+                if (span.getAttribute("hierarchy") == '0') { continue }
+                toggleVisibility(span);
+            }
+        } else {
+            const expand_elem = document.getElementById('expand-tree');
+            expand_elem.setAttribute("href", "tree.html");
+            expand_elem.setAttribute("title", "Undo expand");
+            expand_elem.innerHTML = '<i class="bi bi-caret-up-square"></i>'
+        }
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,10 @@
+{
+    "summary": "This code is a setup file for a Python package named \"q-transformer\". It specifies the package's name, version, author, description, and dependencies. The file also sets up the install requirements and classifiers for the package.",
+    "details": [
+        {
+            "comment": "This code is a setup file for a Python package named \"q-transformer\". It specifies the package's name, version, author, description, and dependencies. The file also sets up the install requirements and classifiers for the package.",
+            "location": "\"/media/root/Prima/works/q-transformer/docs/src/setup.py\":0-36",
+            "content": "from setuptools import setup, find_packages\nsetup(\n  name = 'q-transformer',\n  packages = find_packages(exclude=[]),\n  version = '0.1.5',\n  license='MIT',\n  description = 'Q-Transformer',\n  author = 'Phil Wang',\n  author_email = 'lucidrains@gmail.com',\n  long_description_content_type = 'text/markdown',\n  url = 'https://github.com/lucidrains/q-transformer',\n  keywords = [\n    'artificial intelligence',\n    'deep learning',\n    'attention mechanisms',\n    'transformers',\n    'q-learning'\n  ],\n  install_requires=[\n    'accelerate',\n    'beartype',\n    'classifier-free-guidance-pytorch>=0.4.2',\n    'einops>=0.7.0',\n    'ema-pytorch>=0.3.1',\n    'numpy',\n    'torchtyping',\n    'torch>=2.0'\n  ],\n  classifiers=[\n    'Development Status :: 4 - Beta',\n    'Intended Audience :: Developers',\n    'Topic :: Scientific/Engineering :: Artificial Intelligence',\n    'License :: OSI Approved :: MIT License',\n    'Programming Language :: Python :: 3.6',\n  ],\n)"
+        }
+    ]
+}
