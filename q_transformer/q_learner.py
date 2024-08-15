@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from functools import partial
 from contextlib import nullcontext
@@ -10,17 +12,21 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 from torch.utils.data import Dataset, DataLoader
 
-from torchtyping import TensorType
-
 from einops import rearrange, repeat, pack, unpack
 from einops.layers.torch import Rearrange
 
 from beartype import beartype
-from beartype.typing import Optional, Union, List, Tuple
+from beartype.typing import List, Tuple
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
 from q_transformer.optimizer import get_adam_optimizer
+
+from q_transformer.tensor_typing import (
+    Float,
+    Int,
+    Bool
+)
 
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
@@ -77,7 +83,7 @@ class QLearner(Module):
     @beartype
     def __init__(
         self,
-        model: Union[QRoboticTransformer, Module],
+        model: QRoboticTransformer | Module,
         *,
         dataset: Dataset,
         batch_size: int,
@@ -85,9 +91,9 @@ class QLearner(Module):
         learning_rate: float,
         min_reward: float = 0.,
         grad_accum_every: int = 1,
-        monte_carlo_return: Optional[float] = None,
+        monte_carlo_return: float | None = None,
         weight_decay: float = 0.,
-        accelerator: Optional[Accelerator] = None,
+        accelerator: Accelerator | None = None,
         accelerator_kwargs: dict = dict(),
         dataloader_kwargs: dict = dict(
             shuffle = True
@@ -256,12 +262,12 @@ class QLearner(Module):
 
     def q_learn(
         self,
-        text_embeds:    TensorType['b', 'd', float],
-        states:         TensorType['b', 'c', 'f', 'h', 'w', float],
-        actions:        TensorType['b', int],
-        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
-        reward:         TensorType['b', float],
-        done:           TensorType['b', bool],
+        text_embeds:    Float['b d'],
+        states:         Float['b c f h w'],
+        actions:        Int[' b'],
+        next_states:    Float['b c f h w'],
+        reward:         Float[' b'],
+        done:           Bool[' b'],
         *,
         monte_carlo_return = None
 
@@ -298,16 +304,17 @@ class QLearner(Module):
 
     def n_step_q_learn(
         self,
-        text_embeds:    TensorType['b', 'd', float],
-        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
-        actions:        TensorType['b', 't', int],
-        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
-        rewards:        TensorType['b', 't', float],
-        dones:          TensorType['b', 't', bool],
+        text_embeds:    Float['b t d'],
+        states:         Float['b t c f h w'],
+        actions:        Int['b t'],
+        next_states:    Float['b c f h w'],
+        next_text_embed: Float['b d'],
+        rewards:        Float['b t'],
+        dones:          Bool['b t'],
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[TensorType[()], QIntermediates]:
+    ) -> Tuple[Float[""], QIntermediates]:
         """
         einops
 
@@ -350,7 +357,7 @@ class QLearner(Module):
         q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '*')
 
-        q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)
+        q_next = self.ema_model(next_states, text_embeds = next_text_embed).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
         # prepare rewards and discount factors across timesteps
@@ -379,6 +386,7 @@ class QLearner(Module):
         states,
         actions,
         next_states,
+        next_text_embed,
         rewards,
         dones,
         *,
@@ -400,16 +408,17 @@ class QLearner(Module):
         if dones.ndim == 1:
             dones = rearrange(dones, 'b -> b 1')
 
-        return self.autoregressive_q_learn(text_embeds, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)
+        return self.autoregressive_q_learn(text_embeds, states, actions, next_states, next_text_embed, rewards, dones, monte_carlo_return = monte_carlo_return)
 
     def autoregressive_q_learn(
         self,
-        text_embeds:    TensorType['b', 'd', float],
-        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],
-        actions:        TensorType['b', 't', 'n', int],
-        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],
-        rewards:        TensorType['b', 't', float],
-        dones:          TensorType['b', 't', bool],
+        text_embeds:     Float['b t d'],
+        states:          Float['b t c f h w'],
+        actions:         Int['b t n'],
+        next_states:     Float['b c f h w'],
+        next_text_embed: Float['b d'],
+        rewards:         Float['b t'],
+        dones:           Bool['b t'],
         *,
         monte_carlo_return = None
 
@@ -437,10 +446,6 @@ class QLearner(Module):
         actions, _ = pack_one(actions, '* n')
         text_embeds, _ = pack_one(text_embeds, '* d')
 
-        # repeat text embeds per timestep
-
-        repeated_text_embeds = repeat(text_embeds, 'b ... -> (b n) ...', n = num_timesteps)
-
         # anything after the first done flag will be considered terminal
 
         dones = dones.cumsum(dim = -1) > 0
@@ -459,20 +464,20 @@ class QLearner(Module):
         # get predicted Q for each action
         # unpack back to (b, t, n)
 
-        q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds, actions = actions)
+        q_pred_all_actions = self.model(states, text_embeds = text_embeds, actions = actions)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
         q_pred = unpack_one(q_pred, time_ps, '* n')
 
         # get q_next
 
-        q_next = self.ema_model(next_states, text_embeds = text_embeds)
+        q_next = self.ema_model(next_states, text_embeds = next_text_embed)
         q_next = q_next.max(dim = -1).values
         q_next.clamp_(min = monte_carlo_return)
 
         # get target Q
         # unpack back to - (b, t, n)
 
-        q_target_all_actions = self.ema_model(states, text_embeds = repeated_text_embeds, actions = actions)
+        q_target_all_actions = self.ema_model(states, text_embeds = text_embeds, actions = actions)
         q_target = q_target_all_actions.max(dim = -1).values
 
         q_target.clamp_(min = monte_carlo_return)
@@ -505,8 +510,8 @@ class QLearner(Module):
     def learn(
         self,
         *args,
-        min_reward: Optional[float] = None,
-        monte_carlo_return: Optional[float] = None
+        min_reward: float | None = None,
+        monte_carlo_return: float | None = None
     ):
         _, _, actions, *_ = args
 
@@ -568,8 +573,8 @@ class QLearner(Module):
     def forward(
         self,
         *,
-        monte_carlo_return: Optional[float] = None,
-        min_reward: Optional[float] = None
+        monte_carlo_return: float | None = None,
+        min_reward: float | None = None
     ):
         monte_carlo_return = default(monte_carlo_return, self.monte_carlo_return)
         min_reward = default(min_reward, self.min_reward)

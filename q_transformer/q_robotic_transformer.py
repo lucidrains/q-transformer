@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from random import random
 from functools import partial, cache
 
@@ -9,7 +11,7 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 
 from beartype import beartype
-from beartype.typing import Union, List, Optional, Callable, Tuple, Dict, Any
+from beartype.typing import List, Callable, Tuple, Dict, Any
 
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
@@ -160,7 +162,7 @@ class FeedForward(Module):
     def forward(
         self,
         x,
-        cond_fn: Optional[Callable] = None
+        cond_fn: Callable | None = None
     ):
         x = self.norm(x)
 
@@ -407,7 +409,7 @@ class MaxViT(Module):
 
                 cond_hidden_dims.append(stage_dim_in)
 
-                block = nn.ModuleList([
+                block = ModuleList([
                     MBConv(
                         stage_dim_in,
                         layer_dim,
@@ -450,8 +452,8 @@ class MaxViT(Module):
     def forward(
         self,
         img,
-        texts: Optional[List[str]] = None,
-        cond_fns: Optional[Tuple[Callable, ...]] = None,
+        texts: List[str] | None = None,
+        cond_fns: Tuple[Callable, ...] | None = None,
         cond_drop_prob = 0.,
         return_embeddings = False
     ):
@@ -551,8 +553,8 @@ class TransformerAttention(Module):
         context = None,
         mask = None,
         attn_mask = None,
-        cond_fn: Optional[Callable] = None,
-        cache: Optional[Tensor] = None,
+        cond_fn: Callable | None = None,
+        cache: Tensor | None = None,
         return_cache = False
     ):
         b = x.shape[0]
@@ -643,10 +645,10 @@ class Transformer(Module):
     def forward(
         self,
         x,
-        cond_fns: Optional[Tuple[Callable, ...]] = None,
+        cond_fns: Tuple[Callable, ...] | None = None,
         attn_mask = None,
-        context: Optional[Tensor] = None,
-        cache: Optional[Tensor] = None,
+        context: Tensor | None = None,
+        cache: Tensor | None = None,
         return_cache = False
     ):
         has_cache = exists(cache)
@@ -863,7 +865,7 @@ class QHeadMultipleActions(Module):
     def device(self):
         return self.action_bin_embeddings.device
 
-    def maybe_append_actions(self, sos_tokens, actions: Optional[Tensor] = None):
+    def maybe_append_actions(self, sos_tokens, actions: Tensor | None = None):
         if not exists(actions):
             return sos_tokens
 
@@ -911,7 +913,7 @@ class QHeadMultipleActions(Module):
         self,
         encoded_state,
         return_q_values = False,
-        actions: Optional[Tensor] = None,
+        actions: Tensor | None = None,
         prob_random_action: float = 0.5,
         **kwargs
     ):
@@ -972,7 +974,7 @@ class QHeadMultipleActions(Module):
     def forward(
         self,
         encoded_state: Tensor,
-        actions: Optional[Tensor] = None
+        actions: Tensor | None = None
     ):
         """
         einops
@@ -1000,7 +1002,7 @@ class QRoboticTransformer(Module):
     def __init__(
         self,
         *,
-        vit: Union[Dict[str, Any], MaxViT],
+        vit: Dict[str, Any] | MaxViT,
         num_actions = 8,
         action_bins = 256,
         depth = 6,
@@ -1116,7 +1118,7 @@ class QRoboticTransformer(Module):
         self,
         *args,
         return_q_values = False,
-        actions: Optional[Tensor] = None,
+        actions: Tensor | None = None,
         **kwargs
     ):
         encoded_state = self.encode_state(*args, **kwargs)
@@ -1140,9 +1142,9 @@ class QRoboticTransformer(Module):
     def encode_state(
         self,
         video: Tensor,
-        texts: Optional[Union[List[str], Tuple[str]]] = None,
-        text_embeds: Optional[Tensor] = None,
-        actions: Optional[Tensor] = None,
+        texts: List[str] | Tuple[str] | None = None,
+        text_embeds: Tensor | None = None,
+        actions: Tensor | None = None,
         cond_drop_prob = 0.,
     ):
         """
@@ -1216,9 +1218,9 @@ class QRoboticTransformer(Module):
     def forward(
         self,
         video: Tensor,
-        texts: Optional[List[str]] = None,
-        text_embeds: Optional[Tensor] = None,
-        actions: Optional[Tensor] = None,
+        texts: List[str] | None = None,
+        text_embeds: Tensor | None = None,
+        actions: Tensor | None = None,
         cond_drop_prob = 0.,
     ):
 

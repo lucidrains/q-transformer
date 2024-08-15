@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from random import randrange
 
 import torch
 from torch.utils.data import Dataset
 
-from beartype.typing import Tuple, Optional
+from beartype.typing import Tuple
 
 from torchtyping import TensorType
 from q_transformer.agent import BaseEnvironment
 
 class MockEnvironment(BaseEnvironment):
     def init(self) -> Tuple[
-        Optional[str],
+        str | None,
         TensorType[float]
     ]:
         return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)

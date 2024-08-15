@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from functools import wraps
 from packaging import version
 
 import torch
 from torch import nn, einsum
+from torch.nn import Module
 import torch.nn.functional as F
 
 from einops import rearrange, reduce
@@ -45,7 +48,7 @@ def maybe_reduce_mask_and(*maybe_masks):
 
 # main class
 
-class Attend(nn.Module):
+class Attend(Module):
     def __init__(
         self,
         dropout = 0.,

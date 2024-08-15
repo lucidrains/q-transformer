@@ -23,8 +23,8 @@ setup(
     'classifier-free-guidance-pytorch>=0.4.2',
     'einops>=0.7.0',
     'ema-pytorch>=0.3.1',
+    'jaxtyping',
     'numpy',
-    'torchtyping',
     'torch>=2.0'
   ],
   classifiers=[

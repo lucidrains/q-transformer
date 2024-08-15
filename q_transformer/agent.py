@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -15,7 +17,7 @@ from q_transformer.q_robotic_transformer import QRoboticTransformer
 from torchtyping import TensorType
 
 from beartype import beartype
-from beartype.typing import Iterator, Tuple, Union
+from beartype.typing import Iterator, Tuple
 
 from tqdm import tqdm
 
@@ -114,9 +116,11 @@ class ReplayMemoryDataset(Dataset):
         rewards = self.rewards[episode_index, timestep_slice].copy()
         dones = self.dones[episode_index, timestep_slice].copy()
 
-        next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)].copy()
+        next_state_timestep = min(timestep_index, self.max_episode_len - 1)
+        next_state = self.states[episode_index, next_state_timestep].copy()
+        next_text_embed = self.text_embeds[episode_index, next_state_timestep].copy()
 
-        return text_embeds, states, actions, next_state, rewards, dones
+        return text_embeds, states, actions, next_state, next_text_embed, rewards, dones
 
 # base environment class to extend
 
@@ -126,7 +130,7 @@ class BaseEnvironment(Module):
         self,
         *,
         state_shape: Tuple[int, ...],
-        text_embed_shape: Union[int, Tuple[int, ...]]
+        text_embed_shape: int | Tuple[int, ...]
     ):
         super().__init__()
         self.state_shape = state_shape
