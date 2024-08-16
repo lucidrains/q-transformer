@@ -7,20 +7,20 @@ from torch.utils.data import Dataset
 
 from beartype.typing import Tuple
 
-from torchtyping import TensorType
+from q_transformer.tensor_typing import Float, Int, Bool
 from q_transformer.agent import BaseEnvironment
 
 class MockEnvironment(BaseEnvironment):
     def init(self) -> Tuple[
         str | None,
-        TensorType[float]
+        Float['...']
     ]:
         return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)
 
     def forward(self, actions) -> Tuple[
-        TensorType[(), float],
-        TensorType[float],
-        TensorType[(), bool]
+        Float[''],
+        Float['...'],
+        Bool['']
     ]:
         rewards = torch.randn((), device = self.device)
         next_states = torch.randn(self.state_shape, device = self.device)

@@ -14,7 +14,7 @@ from einops import rearrange
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
-from torchtyping import TensorType
+from q_transformer.tensor_typing import Float, Bool
 
 from beartype import beartype
 from beartype.typing import Iterator, Tuple
@@ -146,11 +146,11 @@ class BaseEnvironment(Module):
 
     def forward(
         self,
-        actions: Tensor
+        actions: Int['...']
     ) -> Tuple[
-        TensorType[(), float],     # reward
-        Tensor,                    # next state
-        TensorType[(), bool]       # done
+        Float[''],     # reward
+        Float['...'],  # next state
+        Bool['']       # done
     ]:
         raise NotImplementedError
 
