@@ -25,7 +25,8 @@ setup(
     'ema-pytorch>=0.3.1',
     'jaxtyping',
     'numpy',
-    'torch>=2.0'
+    'torch>=2.0',
+    'sentencepiece>=0.2.0'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
