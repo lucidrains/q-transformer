@@ -25,13 +25,14 @@ setup(
     'ema-pytorch>=0.3.1',
     'jaxtyping',
     'numpy',
-    'torch>=2.0'
+    'torch>=2.0',
+    'sentencepiece>=0.2.0'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
     'Intended Audience :: Developers',
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
     'License :: OSI Approved :: MIT License',
-    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.10',
   ],
 )

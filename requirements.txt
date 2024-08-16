@@ -1,0 +1,9 @@
+accelerate
+beartype
+classifier-free-guidance-pytorch>=0.4.2
+einops>=0.7.0
+ema-pytorch>=0.3.1
+jaxtyping
+numpy
+torch>=2.0
+sentencepiece==0.2.0
