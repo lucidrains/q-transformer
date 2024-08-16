@@ -67,7 +67,7 @@ class ReplayMemoryDataset(Dataset):
 
         self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'r')
         self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')
-        self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')
+        self.actions = open_memmap(str(actions_path), dtype = 'int64', mode = 'r')
         self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')
         self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'r')
 
@@ -214,7 +214,7 @@ class Agent(Module):
             self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))
 
         self.states      = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))
-        self.actions     = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))
+        self.actions     = open_memmap(str(actions_path), dtype = 'int64', mode = 'w+', shape = (*prec_shape, num_actions))
         self.rewards     = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)
         self.dones       = open_memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)
 
