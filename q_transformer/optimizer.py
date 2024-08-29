@@ -1,4 +1,4 @@
-from torch.optim import AdamW, Adam
+from adam_atan2_pytorch import AdamAtan2
 
 def separate_weight_decayable_params(params):
     wd_params, no_wd_params = [], []
@@ -10,9 +10,9 @@ def separate_weight_decayable_params(params):
 def get_adam_optimizer(
     params,
     lr = 1e-4,
-    wd = 1e-2,
+    wd = 0,
     betas = (0.9, 0.99),
-    eps = 1e-8,
+    regen_reg_rate = 1e-2,
     filter_by_requires_grad = False,
     group_wd_params = True
 ):
@@ -29,7 +29,4 @@ def get_adam_optimizer(
             {'params': no_wd_params, 'weight_decay': 0},
         ]
 
-    if not has_wd:
-        return Adam(params, lr = lr, betas = betas, eps = eps)
-
-    return AdamW(params, lr = lr, weight_decay = wd, betas = betas, eps = eps)
+    return AdamAtan2(params, lr = lr, weight_decay = wd, betas = betas, regen_reg_rate = regen_reg_rate)

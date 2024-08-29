@@ -93,6 +93,7 @@ class QLearner(Module):
         grad_accum_every: int = 1,
         monte_carlo_return: float | None = None,
         weight_decay: float = 0.,
+        regen_reg_rate: float = 1e-3,
         accelerator: Accelerator | None = None,
         accelerator_kwargs: dict = dict(),
         dataloader_kwargs: dict = dict(
@@ -143,6 +144,7 @@ class QLearner(Module):
             model.parameters(),
             lr = learning_rate,
             wd = weight_decay,
+            regen_reg_rate = regen_reg_rate,
             **optimizer_kwargs
         )
 

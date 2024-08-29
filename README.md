@@ -151,3 +151,12 @@ actions = model.get_optimal_actions(video, instructions)
     year    = {2022}
 }
 ```
+
+```bibtex
+@inproceedings{Kumar2023MaintainingPI,
+    title   = {Maintaining Plasticity in Continual Learning via Regenerative Regularization},
+    author  = {Saurabh Kumar and Henrik Marklund and Benjamin Van Roy},
+    year    = {2023},
+    url     = {https://api.semanticscholar.org/CorpusID:261076021}
+}
+```
