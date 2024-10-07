@@ -6,7 +6,7 @@ from functools import partial, cache
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 
@@ -81,7 +81,7 @@ def rotate_half(x):
     x = torch.stack((-x2, x1), dim = -1)
     return rearrange(x, '... d c -> ... (d c)')
 
-@autocast(enabled = False)
+@autocast('cuda', enabled = False)
 def apply_rotary_pos_emb(pos, t):
     return t * pos.cos() + rotate_half(t) * pos.sin()
 
