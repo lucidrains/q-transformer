@@ -63,7 +63,7 @@ class RotaryEmbedding(Module):
         inv_freq = 1.0 / (omega ** (torch.arange(0, dim, 4).float() / dim))
         self.register_buffer('inv_freq', inv_freq)
 
-    @autocast(enabled = False)
+    @autocast('cuda', enabled = False)
     def forward(self, height_width):
         device, dtype = self.inv_freq.device, self.inv_freq.dtype
 
