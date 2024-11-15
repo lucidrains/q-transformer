@@ -6,6 +6,11 @@ from q_transformer import (
     ReplayMemoryDataset
 )
 
+from q_transformer.mocks import (
+    MockReplayDataset,
+    MockReplayNStepDataset
+)
+
 def test_q_transformer():
     model = QRoboticTransformer(
         vit = dict(
@@ -43,7 +48,7 @@ def test_q_transformer():
 
     q_learner = QLearner(
         model,
-        dataset = ReplayMemoryDataset('./replay_memories_data'),
+        dataset = MockReplayDataset(),
         n_step_q_learning = True,
         num_train_steps = 10000,
         learning_rate = 3e-4,

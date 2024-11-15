@@ -21,4 +21,4 @@ jobs:
           python -m uv pip install -e .[test]
       - name: Test with pytest
         run: |
-          python -m pytest tests/
+          python setup.py test
