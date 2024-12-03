@@ -6,6 +6,8 @@ Implementation of <a href="https://qtransformer.github.io/">Q-Transformer</a>, S
 
 I will be keeping around the logic for Q-learning on single action just for final comparison with the proposed autoregressive Q-learning on multiple actions. Also to serve as education for myself and the public.
 
+The autoregressive Q-learning formulation has been reproduced by [Kotb et al.](https://arxiv.org/abs/2407.18841)
+
 ## Install
 
 ```bash
