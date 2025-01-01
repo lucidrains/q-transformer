@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from q_transformer import (
@@ -11,7 +12,10 @@ from q_transformer.mocks import (
     MockReplayNStepDataset
 )
 
-def test_q_transformer():
+
+@pytest.mark.parametrize('num_residual_streams', (1, 4))
+def test_q_transformer(num_residual_streams):
+
     model = QRoboticTransformer(
         vit = dict(
             num_classes = 1000,
@@ -30,7 +34,8 @@ def test_q_transformer():
         dim_head = 64,
         cond_drop_prob = 0.2,
         dueling = True,
-        weight_tie_action_bin_embed = False
+        weight_tie_action_bin_embed = False,
+        num_residual_streams = num_residual_streams
     )
 
     video = torch.randn(2, 3, 6, 224, 224)

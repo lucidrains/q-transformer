@@ -25,6 +25,8 @@ from classifier_free_guidance_pytorch import (
     classifier_free_guidance
 )
 
+from hyper_connections import get_init_and_expand_reduce_stream_functions
+
 # helpers
 
 def exists(val):
@@ -619,7 +621,8 @@ class Transformer(Module):
         flash_attn = True,
         cross_attend = False,
         causal = False,
-        final_norm = True
+        final_norm = True,
+        num_residual_streams = 1
     ):
         super().__init__()
         self.layers = ModuleList([])
@@ -632,11 +635,15 @@ class Transformer(Module):
             flash = flash_attn
         )
 
+        # hyper connections
+
+        init_hyper_conn, self.expand_streams, self.reduce_streams = get_init_and_expand_reduce_stream_functions(num_residual_streams, disable = num_residual_streams == 1)
+
         for _ in range(depth):
             self.layers.append(ModuleList([
-                TransformerAttention(**attn_kwargs, causal = causal, adaptive_ln = adaptive_ln, norm_context = False),
-                TransformerAttention(**attn_kwargs, norm_context = True) if cross_attend else None,
-                FeedForward(dim = dim, dropout = ff_dropout, adaptive_ln = adaptive_ln)
+                init_hyper_conn(dim = dim, branch = TransformerAttention(**attn_kwargs, causal = causal, adaptive_ln = adaptive_ln, norm_context = False)),
+                init_hyper_conn(dim = dim, branch = TransformerAttention(**attn_kwargs, norm_context = True)) if cross_attend else None,
+                init_hyper_conn(dim = dim, branch = FeedForward(dim = dim, dropout = ff_dropout, adaptive_ln = adaptive_ln))
             ]))
 
         self.norm = RMSNorm(dim) if final_norm else nn.Identity()
@@ -661,8 +668,10 @@ class Transformer(Module):
 
         new_caches = []
 
+        x = self.expand_streams(x)
+
         for attn, maybe_cross_attn, ff in self.layers:
-            attn_out, new_cache = attn(
+            x, new_cache = attn(
                 x,
                 attn_mask = attn_mask,
                 cond_fn = next(cond_fns, None),
@@ -672,13 +681,13 @@ class Transformer(Module):
 
             new_caches.append(new_cache)
 
-            x = x + attn_out
-
             if exists(maybe_cross_attn):
                 assert exists(context)
-                x = maybe_cross_attn(x, context = context) + x
+                x = maybe_cross_attn(x, context = context)
 
-            x = ff(x, cond_fn = next(cond_fns, None)) + x
+            x = ff(x, cond_fn = next(cond_fns, None))
+
+        x = self.reduce_streams(x)
 
         new_caches = torch.stack(new_caches)
 
@@ -831,7 +840,8 @@ class QHeadMultipleActions(Module):
         attn_dim_head = 32,
         attn_heads = 8,
         dueling = False,
-        weight_tie_action_bin_embed = False
+        weight_tie_action_bin_embed = False,
+        num_residual_streams = 4
     ):
         super().__init__()
         self.num_actions = num_actions
@@ -852,7 +862,8 @@ class QHeadMultipleActions(Module):
             cross_attend = True,
             adaptive_ln = False,
             causal = True,
-            final_norm = True
+            final_norm = True,
+            num_residual_streams = num_residual_streams
         )
 
         self.final_norm = RMSNorm(dim)
@@ -1017,6 +1028,7 @@ class QRoboticTransformer(Module):
         dueling = False,                       # https://arxiv.org/abs/1511.06581
         flash_attn = True,
         condition_on_text = True,
+        num_residual_streams = 4,
         q_head_attn_kwargs: dict = dict(
             attn_heads = 8,
             attn_dim_head = 64,
@@ -1079,6 +1091,7 @@ class QRoboticTransformer(Module):
             depth = depth,
             flash_attn = flash_attn,
             adaptive_ln = condition_on_text,
+            num_residual_streams = num_residual_streams,
             final_norm = True
         )
 
@@ -1099,6 +1112,7 @@ class QRoboticTransformer(Module):
                 action_bins = action_bins,
                 dueling = dueling,
                 weight_tie_action_bin_embed = weight_tie_action_bin_embed,
+                num_residual_streams = num_residual_streams,
                 **q_head_attn_kwargs
             )
 

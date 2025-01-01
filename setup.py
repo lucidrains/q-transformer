@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 setup(
   name = 'q-transformer',
   packages = find_packages(exclude=[]),
-  version = '0.2.2',
-  license='MIT',
+  version = '0.3.0',
+  license = 'MIT',
   description = 'Q-Transformer',
   author = 'Phil Wang',
   author_email = 'lucidrains@gmail.com',
@@ -24,6 +24,7 @@ setup(
     'classifier-free-guidance-pytorch>=0.7.1',
     'einops>=0.8.0',
     'ema-pytorch>=0.5.3',
+    'hyper-connections>=0.1.7',
     'jaxtyping',
     'numpy',
     'sentencepiece',
