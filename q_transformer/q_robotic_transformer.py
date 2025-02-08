@@ -1171,6 +1171,16 @@ class QRoboticTransformer(Module):
         n - number of learned tokens
         """
 
+        # just auto-move inputs to the same device as robotic transformer
+
+        video = video.to(self.device)
+
+        if exists(actions):
+            actions = actions.to(self.device)
+
+        if exists(text_embeds):
+            text_embeds = text_embeds.to(self.device)
+
         if not self.condition_on_text:
             assert (not exists(texts) and not exists(text_embeds)), 'neither texts nor text embeds should be passed in'
         else:
@@ -1237,13 +1247,6 @@ class QRoboticTransformer(Module):
         actions: Tensor | None = None,
         cond_drop_prob = 0.,
     ):
-
-        # just auto-move inputs to the same device as robotic transformer
-
-        video = video.to(self.device)
-
-        if exists(actions):
-            actions = actions.to(self.device)
 
         # encoding state
 
