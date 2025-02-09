@@ -16,7 +16,7 @@ from beartype.typing import Callable, Any
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
 
-from q_transformer.attend import Attend
+from x_transformers.attend import Attend
 
 from classifier_free_guidance_pytorch import (
     TextConditioner,
@@ -55,6 +55,19 @@ def pack_one(x, pattern):
 
 def unpack_one(x, ps, pattern):
     return unpack(x, ps, pattern)[0]
+
+def maybe_reduce_mask_and(*maybe_masks):
+    maybe_masks = [*filter(exists, maybe_masks)]
+
+    if len(maybe_masks) == 0:
+        return None
+
+    mask, *rest_masks = maybe_masks
+
+    for rest_mask in rest_masks:
+        mask = mask & rest_mask
+
+    return mask
 
 # 2d rotary positional embedding
 # https://arxiv.org/abs/2104.09864
@@ -325,7 +338,7 @@ class Attention(Module):
 
         # attention
 
-        out = self.attend(q, k, v)
+        out, _ = self.attend(q, k, v)
 
         # gate values per head, allow for attending to nothing
 
@@ -598,7 +611,15 @@ class TransformerAttention(Module):
             if exists(attn_mask):
                 attn_mask = F.pad(attn_mask, (self.num_mem_kv, 0), value = True)
 
-        out = self.attend(q, k, v, mask = mask, attn_mask = attn_mask)
+        if exists(mask):
+            mask = repeat(mask, 'b j -> b 1 1 j', h = q.shape[1], i = q.shape[2])
+
+        if exists(attn_mask):
+            attn_mask = rearrange(attn_mask, 'i j -> 1 1 i j')
+
+        attn_mask = maybe_reduce_mask_and(mask, attn_mask)
+
+        out, _ = self.attend(q, k, v, mask = attn_mask)
 
         out = rearrange(out, 'b h n d -> b n (h d)')
         out = self.to_out(out)

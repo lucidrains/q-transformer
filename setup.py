@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'q-transformer',
   packages = find_packages(exclude=[]),
-  version = '0.3.1',
+  version = '0.3.3',
   license = 'MIT',
   description = 'Q-Transformer',
   author = 'Phil Wang',
@@ -28,6 +28,7 @@ setup(
     'jaxtyping',
     'numpy',
     'sentencepiece',
+    'x-transformers>=2.0.2',
     'torch>=2.0'
   ],
   setup_requires=[
