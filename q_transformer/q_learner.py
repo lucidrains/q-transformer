@@ -19,7 +19,7 @@ from beartype import beartype
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
-from q_transformer.optimizer import get_adam_optimizer
+from adam_atan2_pytorch import AdamAtan2
 
 from q_transformer.tensor_typing import (
     Float,
@@ -107,7 +107,6 @@ class QLearner(Module):
         n_step_q_learning = False,
         discount_factor_gamma = 0.98,
         conservative_reg_loss_weight = 1., # they claim 1. is best in paper
-        optimizer_kwargs: dict = dict(),
         checkpoint_folder = './checkpoints',
         checkpoint_every = 1000,
     ):
@@ -139,12 +138,11 @@ class QLearner(Module):
 
         self.max_grad_norm = max_grad_norm
 
-        self.optimizer = get_adam_optimizer(
+        self.optimizer = AdamAtan2(
             model.parameters(),
             lr = learning_rate,
-            wd = weight_decay,
+            weight_decay = weight_decay,
             regen_reg_rate = regen_reg_rate,
-            **optimizer_kwargs
         )
 
         if not exists(accelerator):

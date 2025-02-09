@@ -103,19 +103,19 @@ class RMSNorm(Module):
     def __init__(self, dim, affine = True):
         super().__init__()
         self.scale = dim ** 0.5
-        self.gamma = nn.Parameter(torch.ones(dim)) if affine else 1.
+        self.gamma = nn.Parameter(torch.zeros(dim)) if affine else 1.
 
     def forward(self, x):
-        return l2norm(x) * self.gamma * self.scale
+        return l2norm(x) * (self.gamma + 1) * self.scale
 
 class ChanRMSNorm(Module):
     def __init__(self, dim, affine = True):
         super().__init__()
         self.scale = dim ** 0.5
-        self.gamma = nn.Parameter(torch.ones(dim, 1, 1)) if affine else 1.
+        self.gamma = nn.Parameter(torch.zeros(dim, 1, 1)) if affine else 1.
 
     def forward(self, x):
-        return l2norm(x, dim = 1) * self.gamma * self.scale
+        return l2norm(x, dim = 1) * (self.gamma + 1) * self.scale
 
 # sinusoidal positions
 
