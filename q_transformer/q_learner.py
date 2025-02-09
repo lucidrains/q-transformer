@@ -16,7 +16,6 @@ from einops import rearrange, repeat, pack, unpack
 from einops.layers.torch import Rearrange
 
 from beartype import beartype
-from beartype.typing import List, Tuple
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
@@ -273,7 +272,7 @@ class QLearner(Module):
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[TensorType[()], QIntermediates]:
+    ) -> tuple[Float[''], QIntermediates]:
         # 'next' stands for the very next time step (whether state, q, actions etc)
 
         γ = self.discount_factor_gamma
@@ -424,7 +423,7 @@ class QLearner(Module):
         *,
         monte_carlo_return = None
 
-    ) -> Tuple[TensorType[()], QIntermediates]:
+    ) -> tuple[Float[''], QIntermediates]:
         """
         einops
 

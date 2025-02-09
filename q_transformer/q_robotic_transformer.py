@@ -11,7 +11,7 @@ from torch import nn, einsum, Tensor
 from torch.nn import Module, ModuleList
 
 from beartype import beartype
-from beartype.typing import List, Callable, Tuple, Dict, Any
+from beartype.typing import Callable, Any
 
 from einops import pack, unpack, repeat, reduce, rearrange
 from einops.layers.torch import Rearrange, Reduce
@@ -347,7 +347,7 @@ class MaxViT(Module):
         *,
         num_classes,
         dim,
-        depth: Tuple[int, ...],
+        depth: tuple[int, ...],
         heads = 8,
         dim_head = 64,
         dim_conv_stem = None,
@@ -454,8 +454,8 @@ class MaxViT(Module):
     def forward(
         self,
         img,
-        texts: List[str] | None = None,
-        cond_fns: Tuple[Callable, ...] | None = None,
+        texts: list[str] | None = None,
+        cond_fns: tuple[Callable, ...] | None = None,
         cond_drop_prob = 0.,
         return_embeddings = False
     ):
@@ -652,7 +652,7 @@ class Transformer(Module):
     def forward(
         self,
         x,
-        cond_fns: Tuple[Callable, ...] | None = None,
+        cond_fns: tuple[Callable, ...] | None = None,
         attn_mask = None,
         context: Tensor | None = None,
         cache: Tensor | None = None,
@@ -1013,7 +1013,7 @@ class QRoboticTransformer(Module):
     def __init__(
         self,
         *,
-        vit: Dict[str, Any] | MaxViT,
+        vit: dict[str, Any] | MaxViT,
         num_actions = 8,
         action_bins = 256,
         depth = 6,
@@ -1124,7 +1124,7 @@ class QRoboticTransformer(Module):
         return self.q_head.get_random_actions(batch_size)
 
     @beartype
-    def embed_texts(self, texts: List[str]):
+    def embed_texts(self, texts: list[str]):
         return self.conditioner.embed_texts(texts)
 
     @torch.no_grad()
@@ -1156,7 +1156,7 @@ class QRoboticTransformer(Module):
     def encode_state(
         self,
         video: Tensor,
-        texts: List[str] | Tuple[str] | None = None,
+        texts: list[str] | tuple[str] | None = None,
         text_embeds: Tensor | None = None,
         actions: Tensor | None = None,
         cond_drop_prob = 0.,
@@ -1242,7 +1242,7 @@ class QRoboticTransformer(Module):
     def forward(
         self,
         video: Tensor,
-        texts: List[str] | None = None,
+        texts: list[str] | None = None,
         text_embeds: Tensor | None = None,
         actions: Tensor | None = None,
         cond_drop_prob = 0.,

@@ -17,7 +17,7 @@ from q_transformer.q_robotic_transformer import QRoboticTransformer
 from q_transformer.tensor_typing import Float, Bool
 
 from beartype import beartype
-from beartype.typing import Iterator, Tuple
+from beartype.typing import Iterator
 
 from tqdm import tqdm
 
@@ -129,8 +129,8 @@ class BaseEnvironment(Module):
     def __init__(
         self,
         *,
-        state_shape: Tuple[int, ...],
-        text_embed_shape: int | Tuple[int, ...]
+        state_shape: tuple[int, ...],
+        text_embed_shape: int | tuple[int, ...]
     ):
         super().__init__()
         self.state_shape = state_shape
@@ -141,13 +141,13 @@ class BaseEnvironment(Module):
     def device(self):
         return self.dummy.device
 
-    def init(self) -> Tuple[str, Tensor]: # (instruction, initial state)
+    def init(self) -> tuple[str, Tensor]: # (instruction, initial state)
         raise NotImplementedError
 
     def forward(
         self,
         actions: Int['...']
-    ) -> Tuple[
+    ) -> tuple[
         Float[''],     # reward
         Float['...'],  # next state
         Bool['']       # done

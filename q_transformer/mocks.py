@@ -5,19 +5,17 @@ from random import randrange
 import torch
 from torch.utils.data import Dataset
 
-from beartype.typing import Tuple
-
 from q_transformer.tensor_typing import Float, Int, Bool
 from q_transformer.agent import BaseEnvironment
 
 class MockEnvironment(BaseEnvironment):
-    def init(self) -> Tuple[
+    def init(self) -> tuple[
         str | None,
         Float['...']
     ]:
         return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)
 
-    def forward(self, actions) -> Tuple[
+    def forward(self, actions) -> tuple[
         Float[''],
         Float['...'],
         Bool['']
