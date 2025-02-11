@@ -793,8 +793,8 @@ class DuelingHead(Module):
 
         values = self.to_values(x)
 
-        q_values = values + advantages
-        return q_values.sigmoid()
+        q_value_logits = values + advantages
+        return q_value_logits
 
 # Q head modules, for either single or multiple actions
 
@@ -811,7 +811,7 @@ class QHeadSingleAction(Module):
         self.action_bins = action_bins
 
         if dueling:
-            self.to_q_values = nn.Sequential(
+            self.to_q_value_logits = nn.Sequential(
                 Reduce('b (f n) d -> b d', 'mean', n = num_learned_tokens),
                 DuelingHead(
                     dim,
@@ -819,11 +819,10 @@ class QHeadSingleAction(Module):
                 )
             )
         else:
-            self.to_q_values = nn.Sequential(
+            self.to_q_value_logits = nn.Sequential(
                 Reduce('b (f n) d -> b d', 'mean', n = num_learned_tokens),
                 RMSNorm(dim),
                 nn.Linear(dim, action_bins),
-                nn.Sigmoid()
             )
 
     def get_random_actions(self, batch_size):
@@ -848,7 +847,7 @@ class QHeadSingleAction(Module):
         return action_indices, max_q
 
     def forward(self, encoded_state):
-        return self.to_q_values(encoded_state)
+        return self.to_q_value_logits(encoded_state)
 
 class QHeadMultipleActions(Module):
     def __init__(
@@ -871,9 +870,9 @@ class QHeadMultipleActions(Module):
         self.action_bin_embeddings = nn.Parameter(torch.zeros(num_actions, action_bins, dim))
         nn.init.normal_(self.action_bin_embeddings, std = 0.02)
 
-        self.to_q_values = None
+        self.to_q_value_logits = None
         if not weight_tie_action_bin_embed:
-            self.to_q_values = nn.Linear(dim, action_bins)
+            self.to_q_value_logits = nn.Linear(dim, action_bins)
 
         self.transformer = Transformer(
             dim = dim,
@@ -917,8 +916,8 @@ class QHeadMultipleActions(Module):
     def get_q_values(self, embed):
         num_actions = embed.shape[-2]
 
-        if exists(self.to_q_values):
-            logits = self.to_q_values(embed)
+        if exists(self.to_q_value_logits):
+            logits = self.to_q_value_logits(embed)
         else:
             # each token predicts next action bin
             action_bin_embeddings = self.action_bin_embeddings[:num_actions]
@@ -930,11 +929,11 @@ class QHeadMultipleActions(Module):
             values = einsum('b n d, n d -> b n', embed, self.to_values[:num_actions])
             values = rearrange(values, 'b n -> b n 1')
 
-            q_values = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
+            q_value_logits = values + (advantages - reduce(advantages, '... a -> ... 1', 'mean'))
         else:
-            q_values = logits
+            q_value_logits = logits
 
-        return q_values.sigmoid()
+        return q_value_logits
 
     def get_random_actions(self, batch_size, num_actions = None):
         num_actions = default(num_actions, self.num_actions)
@@ -1285,8 +1284,8 @@ class QRoboticTransformer(Module):
         if self.is_single_action:
             assert not exists(actions), 'actions should not be passed in for single action robotic transformer'
 
-            q_values = self.q_head(encoded_state)
+            q_value_logits = self.q_head(encoded_state)
         else:
-            q_values = self.q_head(encoded_state, actions = actions)
+            q_value_logits = self.q_head(encoded_state, actions = actions)
 
-        return q_values
+        return q_value_logits

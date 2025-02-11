@@ -290,11 +290,11 @@ class QLearner(Module):
 
         # Bellman's equation. most important line of code, hopefully done correctly
 
-        q_target = reward + not_terminal * (γ * q_next)
+        q_target = reward + not_terminal * (γ * q_next.sigmoid())
 
         # now just force the online model to be able to predict this target
 
-        loss = F.mse_loss(q_pred, q_target)
+        loss = F.mse_loss(q_pred.sigmoid(), q_target)
 
         # that's it. ~5 loc for the heart of q-learning
         # return loss and some of the intermediates for logging
@@ -361,7 +361,7 @@ class QLearner(Module):
 
         # prepare rewards and discount factors across timesteps
 
-        rewards, _ = pack([rewards, q_next], 'b *')
+        rewards, _ = pack([rewards, q_next.sigmoid()], 'b *')
 
         γ = self.get_discount_matrix(num_timesteps + 1)[:-1, :]
 
@@ -371,7 +371,7 @@ class QLearner(Module):
 
         # have transformer learn to predict above Q target
 
-        loss = F.mse_loss(q_pred, q_target)
+        loss = F.mse_loss(q_pred.sigmoid(), q_target)
 
         # prepare q prediction
 
@@ -490,15 +490,15 @@ class QLearner(Module):
         q_pred_rest_actions, q_pred_last_action      = q_pred[..., :-1], q_pred[..., -1]
         q_target_first_action, q_target_rest_actions = q_target[..., 0], q_target[..., 1:]
 
-        losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions, q_target_rest_actions, reduction = 'none')
+        losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions.sigmoid(), q_target_rest_actions.sigmoid(), reduction = 'none')
 
         # next take care of the very last action, which incorporates the rewards
 
         q_target_last_action, _ = pack([q_target_first_action[..., 1:], q_next], 'b *')
 
-        q_target_last_action = rewards + γ * q_target_last_action
+        q_target_last_action = rewards + γ * q_target_last_action.sigmoid()
 
-        losses_last_action = F.mse_loss(q_pred_last_action, q_target_last_action, reduction = 'none')
+        losses_last_action = F.mse_loss(q_pred_last_action.sigmoid(), q_target_last_action, reduction = 'none')
 
         # flatten and average
 
