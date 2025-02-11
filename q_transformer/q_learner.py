@@ -304,9 +304,16 @@ class QLearner(Module):
         q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
+        # get the q_next_value, which depends on whether classification loss being used
+
+        if self.use_bce_loss:
+            q_next_value = self.hl_gauss_loss.transform_from_logits(q_next)
+        else:
+            q_next_value = q_next.sigmoid()
+
         # Bellman's equation. most important line of code, hopefully done correctly
 
-        q_target = reward + not_terminal * (γ * q_next.sigmoid())
+        q_target = reward + not_terminal * (γ * q_next_value)
 
         # now just force the online model to be able to predict this target
 
@@ -378,9 +385,16 @@ class QLearner(Module):
         q_next = self.ema_model(next_states, text_embeds = next_text_embed).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
 
+        # determine the q_next_value
+
+        if self.use_bce_loss:
+            q_next_value = self.hl_gauss_loss.transform_from_logits(q_next)
+        else:
+            q_next_value = q_next.sigmoid()
+
         # prepare rewards and discount factors across timesteps
 
-        rewards, _ = pack([rewards, q_next.sigmoid()], 'b *')
+        rewards, _ = pack([rewards, q_next_value], 'b *')
 
         γ = self.get_discount_matrix(num_timesteps + 1)[:-1, :]
 
@@ -513,7 +527,8 @@ class QLearner(Module):
         q_target_first_action, q_target_rest_actions = q_target[..., 0], q_target[..., 1:]
 
         if self.use_bce_loss:
-            losses_all_actions_but_last = self.hl_gauss_loss(q_pred_rest_actions, q_target_rest_actions, reduction = 'none')
+            q_target_rest_actions_values = self.hl_gauss_loss.transform_from_logits(q_target_rest_actions)
+            losses_all_actions_but_last = self.hl_gauss_loss(q_pred_rest_actions, q_target_rest_actions_values, reduction = 'none')
         else:
             losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions.sigmoid(), q_target_rest_actions.sigmoid(), reduction = 'none')
 
@@ -521,10 +536,19 @@ class QLearner(Module):
 
         q_target_last_action, _ = pack([q_target_first_action[..., 1:], q_next], 'b *')
 
-        q_target_last_action = rewards + γ * q_target_last_action.sigmoid()
+        if self.use_bce_loss:
+            q_target_last_action_value = self.hl_gauss_loss.transform_from_logits(q_target_last_action)
+        else:
+            q_target_last_action_value = q_target_last_action.sigmoid()
+
+        # Bellman's equation
+
+        q_target_last_action_value = rewards + γ * q_target_last_action_value
+
+        # loss
 
         if self.use_bce_loss:
-            losses_last_action = self.hl_gauss_loss(q_pred_last_action, q_target_last_action, reduction = 'none')
+            losses_last_action = self.hl_gauss_loss(q_pred_last_action, q_target_last_action_value, reduction = 'none')
         else:
             losses_last_action = F.mse_loss(q_pred_last_action.sigmoid(), q_target_last_action, reduction = 'none')
 
