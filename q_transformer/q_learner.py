@@ -21,7 +21,7 @@ from q_transformer.q_robotic_transformer import QRoboticTransformer
 
 from adam_atan2_pytorch import AdamAtan2
 
-from hl_gauss_pytorch import HLGaussLoss
+from hl_gauss_pytorch import BinaryHLGaussLoss
 
 from q_transformer.tensor_typing import (
     Float,
@@ -166,12 +166,8 @@ class QLearner(Module):
 
         self.use_bce_loss = use_bce_loss
 
-        self.hl_gauss_loss = HLGaussLoss(
-            min_value = 0.,
-            max_value = 1.,
-            num_bins = 2,
-            clamp_to_range = True,
-            sigma = hl_gauss_sigma
+        self.hl_gauss_loss = BinaryHLGaussLoss(
+            sigma = hl_gauss_sigma,
         )
 
         self.hl_gauss_loss.to(accelerator.device)
@@ -315,8 +311,7 @@ class QLearner(Module):
         # now just force the online model to be able to predict this target
 
         if self.use_bce_loss:
-            q_target_prob = self.hl_gauss_loss.transform_to_probs(q_target)[..., 1]
-            loss = F.binary_cross_entropy(q_pred, q_target_prob)
+            loss = self.hl_gauss_loss(q_pred, q_target)
         else:
             loss = F.mse_loss(q_pred.sigmoid(), q_target)
 
@@ -396,8 +391,7 @@ class QLearner(Module):
         # have transformer learn to predict above Q target
 
         if self.use_bce_loss:
-            q_target_prob = self.hl_gauss_loss.transform_to_probs(q_target)[..., 1]
-            loss = F.binary_cross_entropy(q_pred, q_target_prob)
+            loss = self.hl_gauss_loss(q_pred, q_target)
         else:
             loss = F.mse_loss(q_pred.sigmoid(), q_target)
 
@@ -519,8 +513,7 @@ class QLearner(Module):
         q_target_first_action, q_target_rest_actions = q_target[..., 0], q_target[..., 1:]
 
         if self.use_bce_loss:
-            q_target_rest_actions_prob = self.hl_gauss_loss.transform_to_probs(q_target_rest_actions)[..., 1]
-            losses_all_actions_but_last = F.binary_cross_entropy(q_pred_rest_actions, q_target_rest_actions_prob, reduction = 'none')
+            losses_all_actions_but_last = self.hl_gauss_loss(q_pred_rest_actions, q_target_rest_actions, reduction = 'none')
         else:
             losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions.sigmoid(), q_target_rest_actions.sigmoid(), reduction = 'none')
 
@@ -531,8 +524,7 @@ class QLearner(Module):
         q_target_last_action = rewards + γ * q_target_last_action.sigmoid()
 
         if self.use_bce_loss:
-            q_target_last_action_prob = self.hl_gauss_loss.transform_to_probs(q_target_last_action)[..., 1]
-            losses_last_action = F.binary_cross_entropy(q_pred_last_action, q_target_last_action_prob, reduction = 'none')
+            losses_last_action = self.hl_gauss_loss(q_pred_last_action, q_target_last_action, reduction = 'none')
         else:
             losses_last_action = F.mse_loss(q_pred_last_action.sigmoid(), q_target_last_action, reduction = 'none')
 
