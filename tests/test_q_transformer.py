@@ -14,7 +14,11 @@ from q_transformer.mocks import (
 
 
 @pytest.mark.parametrize('num_residual_streams', (1, 4))
-def test_q_transformer(num_residual_streams):
+@pytest.mark.parametrize('use_bce_loss', (False, True))
+def test_q_transformer(
+    num_residual_streams,
+    use_bce_loss
+):
 
     model = QRoboticTransformer(
         vit = dict(
@@ -57,5 +61,6 @@ def test_q_transformer(num_residual_streams):
         n_step_q_learning = True,
         num_train_steps = 10000,
         learning_rate = 3e-4,
-        batch_size = 1
+        batch_size = 1,
+        use_bce_loss = use_bce_loss
     )
