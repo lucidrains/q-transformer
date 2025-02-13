@@ -73,6 +73,8 @@ class ReplayMemoryDataset(Dataset):
 
         self.num_timesteps = num_timesteps
 
+        self.num_actions = self.actions.shape[-1]
+
         # calculate episode length based on dones
         # filter out any episodes that are insufficient in length
 

@@ -18,6 +18,7 @@ from einops.layers.torch import Rearrange
 from beartype import beartype
 
 from q_transformer.q_robotic_transformer import QRoboticTransformer
+from q_transformer.agent import ReplayMemoryDataset
 
 from adam_atan2_pytorch import AdamAtan2
 
@@ -173,6 +174,11 @@ class QLearner(Module):
         self.hl_gauss_loss.to(accelerator.device)
 
         self.monte_carlo_return = monte_carlo_return
+
+        # dataset from replay memories
+
+        if isinstance(dataset, ReplayMemoryDataset):
+            assert dataset.num_actions == model.num_actions, f'the ReplayMemoryDataset is loading memories where the transformer had {dataset.num_actions} actions but the model has only {model.num_actions} actions'
 
         self.dataloader = DataLoader(
             dataset,

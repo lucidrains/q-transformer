@@ -1129,6 +1129,7 @@ class QRoboticTransformer(Module):
         else:
             self.q_head = QHeadMultipleActions(
                 attend_dim,
+                num_actions = num_actions,
                 action_bins = action_bins,
                 dueling = dueling,
                 weight_tie_action_bin_embed = weight_tie_action_bin_embed,
