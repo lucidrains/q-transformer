@@ -56,6 +56,15 @@ def pack_one(x, pattern):
 def unpack_one(x, ps, pattern):
     return unpack(x, ps, pattern)[0]
 
+def pack_one_with_inverse(x, pattern):
+    packed, packed_shape = pack_one(x, pattern)
+
+    def inverse(out, inv_pattern = None):
+        inv_pattern = default(inv_pattern, pattern)
+        return unpack_one(out, packed_shape, inv_pattern)
+
+    return packed, inverse
+
 def maybe_reduce_mask_and(*maybe_masks):
     maybe_masks = [*filter(exists, maybe_masks)]
 
@@ -749,7 +758,7 @@ class TokenLearner(Module):
         )
 
     def forward(self, x):
-        x, ps = pack_one(x, '* c h w')
+        x, unpack_time = pack_one_with_inverse(x, '* c h w')
         x = repeat(x, 'b c h w -> b (g c) h w', g = self.num_output_tokens)
         attn = self.net(x)
 
@@ -757,7 +766,7 @@ class TokenLearner(Module):
         x = rearrange(x, 'b (g c) h w -> b c g h w', g = self.num_output_tokens)
 
         x = reduce(x * attn, 'b c g h w -> b c g', 'mean')
-        x = unpack_one(x, ps, '* c n')
+        x = unpack_time(x, '* c n')
         return x
 
 # Dueling heads for Q value
@@ -1226,7 +1235,7 @@ class QRoboticTransformer(Module):
         vit_cond_fns, transformer_cond_fns = cond_fns[:-(depth * 2)], cond_fns[-(depth * 2):]
 
         video = rearrange(video, 'b c f h w -> b f c h w')
-        images, packed_shape = pack_one(video, '* c h w')
+        images, inv_pack_time = pack_one_with_inverse(video, '* c h w')
 
         tokens = self.vit(
             images,
@@ -1236,7 +1245,7 @@ class QRoboticTransformer(Module):
             return_embeddings = True
         )
 
-        tokens = unpack_one(tokens, packed_shape, '* c h w')
+        tokens = inv_pack_time(tokens, '* c h w')
         learned_tokens = self.token_learner(tokens)
 
         tokens_per_frame = learned_tokens.shape[-1]

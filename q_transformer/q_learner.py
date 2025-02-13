@@ -66,6 +66,15 @@ def pack_one(t, pattern):
 def unpack_one(t, ps, pattern):
     return unpack(t, ps, pattern)[0]
 
+def pack_one_with_inverse(x, pattern):
+    packed, packed_shape = pack_one(x, pattern)
+
+    def inverse(out, inv_pattern = None):
+        inv_pattern = default(inv_pattern, pattern)
+        return unpack_one(out, packed_shape, inv_pattern)
+
+    return packed, inverse
+
 def cycle(dl):
     while True:
         for batch in dl:
@@ -364,7 +373,7 @@ class QLearner(Module):
 
         # fold time steps into batch
 
-        states, time_ps = pack_one(states, '* c f h w')
+        states, inv_pack_time = pack_one_with_inverse(states, '* c f h w')
         text_embeds, _ = pack_one(text_embeds, '* d')
 
         # repeat text embeds per timestep
@@ -386,7 +395,7 @@ class QLearner(Module):
 
         q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
-        q_pred = unpack_one(q_pred, time_ps, '*')
+        q_pred = inv_pack_time(q_pred, '*')
 
         q_next = self.ema_model(next_states, text_embeds = next_text_embed).amax(dim = -1)
         q_next.clamp_(min = default(monte_carlo_return, -1e4))
@@ -417,7 +426,7 @@ class QLearner(Module):
 
         # prepare q prediction
 
-        q_pred_all_actions = unpack_one(q_pred_all_actions, time_ps, '* a')
+        q_pred_all_actions = inv_pack_time(q_pred_all_actions, '* a')
 
         return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)
 
@@ -483,7 +492,7 @@ class QLearner(Module):
 
         # fold time steps into batch
 
-        states, time_ps = pack_one(states, '* c f h w')
+        states, inv_pack_time = pack_one_with_inverse(states, '* c f h w')
         actions, _ = pack_one(actions, '* n')
         text_embeds, _ = pack_one(text_embeds, '* d')
 
@@ -507,7 +516,7 @@ class QLearner(Module):
 
         q_pred_all_actions = self.model(states, text_embeds = text_embeds, actions = actions)
         q_pred = batch_select_indices(q_pred_all_actions, actions)
-        q_pred = unpack_one(q_pred, time_ps, '* n')
+        q_pred = inv_pack_time(q_pred, '* n')
 
         # get q_next
 
@@ -522,7 +531,7 @@ class QLearner(Module):
         q_target = q_target_all_actions.max(dim = -1).values
 
         q_target.clamp_(min = monte_carlo_return)
-        q_target = unpack_one(q_target, time_ps, '* n')
+        q_target = inv_pack_time(q_target, '* n')
 
         # main contribution of the paper is the following logic
         # section 4.1 - eq. 1
