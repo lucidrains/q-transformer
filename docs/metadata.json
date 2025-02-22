@@ -1,0 +1,55 @@
+{
+    "url": {
+        "full": "https://github.com/lucidrains/q-transformer",
+        "partial": "lucidrains/q-transformer"
+    },
+    "file_mapping": {
+        "0": {
+            "filepath": "/README.md",
+            "entry_id": 0,
+            "language_id": "plain-text"
+        },
+        "1": {
+            "filepath": "/q_transformer/__init__.py",
+            "entry_id": 14,
+            "language_id": "python"
+        },
+        "2": {
+            "filepath": "/q_transformer/agent.py",
+            "entry_id": 18,
+            "language_id": "python"
+        },
+        "3": {
+            "filepath": "/q_transformer/attend.py",
+            "entry_id": 38,
+            "language_id": "python"
+        },
+        "4": {
+            "filepath": "/q_transformer/mocks.py",
+            "entry_id": 48,
+            "language_id": "python"
+        },
+        "5": {
+            "filepath": "/q_transformer/optimizer.py",
+            "entry_id": 56,
+            "language_id": "python"
+        },
+        "6": {
+            "filepath": "/q_transformer/q_learner.py",
+            "entry_id": 60,
+            "language_id": "python"
+        },
+        "7": {
+            "filepath": "/q_transformer/q_robotic_transformer.py",
+            "entry_id": 100,
+            "language_id": "python"
+        },
+        "8": {
+            "filepath": "/setup.py",
+            "entry_id": 168,
+            "language_id": "python"
+        }
+    },
+    "project_name": "q-transformer",
+    "split_count": 2
+}
