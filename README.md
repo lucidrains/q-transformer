@@ -180,3 +180,13 @@ actions = model.get_optimal_actions(video, instructions)
     url    = {https://api.semanticscholar.org/CorpusID:268253088}
 }
 ```
+
+```bibtex
+@inproceedings{Hasselt2015DeepRL,
+    title   = {Deep Reinforcement Learning with Double Q-Learning},
+    author  = {H. V. Hasselt and Arthur Guez and David Silver},
+    booktitle = {AAAI Conference on Artificial Intelligence},
+    year    = {2015},
+    url     = {https://api.semanticscholar.org/CorpusID:6208256}
+}
+```

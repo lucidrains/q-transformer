@@ -254,7 +254,7 @@ class QLearner(Module):
         path = Path(path)
         assert exists(path)
 
-        pkg = torch.load(str(path))
+        pkg = torch.load(str(path), weights_only = True)
 
         self.unwrap(self.model).load_state_dict(pkg['model'])
         self.unwrap(self.ema_model).load_state_dict(pkg['ema_model'])

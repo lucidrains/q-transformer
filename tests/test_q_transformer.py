@@ -15,9 +15,11 @@ from q_transformer.mocks import (
 
 @pytest.mark.parametrize('num_residual_streams', (1, 4))
 @pytest.mark.parametrize('use_bce_loss', (False, True))
+@pytest.mark.parametrize('dual_critics', (False, True))
 def test_q_transformer(
     num_residual_streams,
-    use_bce_loss
+    use_bce_loss,
+    dual_critics
 ):
 
     model = QRoboticTransformer(
@@ -39,7 +41,8 @@ def test_q_transformer(
         cond_drop_prob = 0.2,
         dueling = True,
         weight_tie_action_bin_embed = False,
-        num_residual_streams = num_residual_streams
+        num_residual_streams = num_residual_streams,
+        dual_critics = dual_critics
     )
 
     video = torch.randn(2, 3, 6, 224, 224)

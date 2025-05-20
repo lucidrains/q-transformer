@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from random import random
+from copy import deepcopy
 from functools import partial, cache
 
 import torch
@@ -472,7 +473,6 @@ class MaxViT(Module):
     def downsample_factor(self):
         return (2 if self.conv_stem_downsample else 1) * (2 ** len(self.depth))
 
-    @beartype
     def forward(
         self,
         img,
@@ -678,7 +678,6 @@ class Transformer(Module):
 
         self.norm = RMSNorm(dim) if final_norm else nn.Identity()
 
-    @beartype
     def forward(
         self,
         x,
@@ -814,9 +813,12 @@ class QHeadSingleAction(Module):
         *,
         num_learned_tokens = 8,
         action_bins = 256,
-        dueling = False
+        dueling = False,
+        dual_critics = False
     ):
         super().__init__()
+        self.dual_critics = dual_critics
+
         self.action_bins = action_bins
 
         if dueling:
@@ -856,7 +858,12 @@ class QHeadSingleAction(Module):
         return action_indices, max_q
 
     def forward(self, encoded_state):
-        return self.to_q_value_logits(encoded_state)
+        q_values = self.to_q_value_logits(encoded_state)
+
+        if not self.dual_critics:
+            return q_values
+
+        return reduce(q_values, '(critics b) ... -> b ...', 'min', critics = 2)
 
 class QHeadMultipleActions(Module):
     def __init__(
@@ -870,7 +877,8 @@ class QHeadMultipleActions(Module):
         attn_heads = 8,
         dueling = False,
         weight_tie_action_bin_embed = False,
-        num_residual_streams = 4
+        num_residual_streams = 4,
+        dual_critics = False
     ):
         super().__init__()
         self.num_actions = num_actions
@@ -901,6 +909,8 @@ class QHeadMultipleActions(Module):
         if dueling:
             self.to_values = nn.Parameter(torch.zeros(num_actions, dim))
 
+        self.dual_critics = dual_critics
+
     @property
     def device(self):
         return self.action_bin_embeddings.device
@@ -908,6 +918,11 @@ class QHeadMultipleActions(Module):
     def maybe_append_actions(self, sos_tokens, actions: Tensor | None = None):
         if not exists(actions):
             return sos_tokens
+
+        # if dual critics, repeat the actions
+
+        if self.dual_critics and exists(actions):
+            actions = repeat(actions, 'b ... -> (critics b) ...', critics = 2)
 
         batch, num_actions = actions.shape
         action_embeddings = self.action_bin_embeddings[:num_actions]
@@ -942,7 +957,10 @@ class QHeadMultipleActions(Module):
         else:
             q_value_logits = logits
 
-        return q_value_logits
+        if not self.dual_critics:
+            return q_value_logits
+
+        return reduce(q_value_logits, '(critics b) ... -> b ...', 'min', critics = 2)
 
     def get_random_actions(self, batch_size, num_actions = None):
         num_actions = default(num_actions, self.num_actions)
@@ -958,7 +976,7 @@ class QHeadMultipleActions(Module):
         **kwargs
     ):
         assert 0. <= prob_random_action <= 1.
-        batch = encoded_state.shape[0]
+        batch = encoded_state.shape[0] // (2 if self.dual_critics else 1)
 
         if prob_random_action == 1:
             return self.get_random_actions(batch)
@@ -983,6 +1001,9 @@ class QHeadMultipleActions(Module):
 
             q_values = einsum('b d, a d -> b a', last_embed, bin_embeddings)
 
+            if self.dual_critics:
+                q_values = reduce(q_values, '(critics b) ... -> b ...', 'min', critics = 2)
+
             selected_action_bins = q_values.argmax(dim = -1)
 
             if prob_random_action > 0.:
@@ -998,6 +1019,9 @@ class QHeadMultipleActions(Module):
 
 
             next_action_embed = bin_embeddings[selected_action_bins]
+
+            if self.dual_critics:
+                next_action_embed = repeat(next_action_embed, 'b ... -> (critics b) ...', critics = 2)
 
             tokens, _ = pack((tokens, next_action_embed), 'b * d')
 
@@ -1032,13 +1056,14 @@ class QHeadMultipleActions(Module):
 
         embed = self.transformer(tokens, context = encoded_state)
 
-        return self.get_q_values(embed)
+        q_values = self.get_q_values(embed)
+
+        return q_values
 
 # Robotic Transformer
 
 class QRoboticTransformer(Module):
 
-    @beartype
     def __init__(
         self,
         *,
@@ -1063,7 +1088,8 @@ class QRoboticTransformer(Module):
             attn_dim_head = 64,
             attn_depth = 2
         ),
-        weight_tie_action_bin_embed = True      # when projecting to action bin Q values, whether to weight tie to original embeddings
+        weight_tie_action_bin_embed = True,     # when projecting to action bin Q values, whether to weight tie to original embeddings
+        dual_critics = False
     ):
         super().__init__()
 
@@ -1126,6 +1152,13 @@ class QRoboticTransformer(Module):
 
         self.cond_drop_prob = cond_drop_prob
 
+        # dual critic for reducing overestimation bias - https://arxiv.org/abs/1509.06461
+
+        self.dual_critics = dual_critics
+
+        if dual_critics:
+            self.second_transformer_critic = deepcopy(self.transformer)
+
         # Q head
 
         if self.is_single_action:
@@ -1133,7 +1166,8 @@ class QRoboticTransformer(Module):
                 attend_dim,
                 num_learned_tokens = self.num_learned_tokens,
                 action_bins = action_bins,
-                dueling = dueling
+                dueling = dueling,
+                dual_critics = dual_critics
             )
         else:
             self.q_head = QHeadMultipleActions(
@@ -1143,6 +1177,7 @@ class QRoboticTransformer(Module):
                 dueling = dueling,
                 weight_tie_action_bin_embed = weight_tie_action_bin_embed,
                 num_residual_streams = num_residual_streams,
+                dual_critics = dual_critics,
                 **q_head_attn_kwargs
             )
 
@@ -1153,7 +1188,6 @@ class QRoboticTransformer(Module):
     def get_random_actions(self, batch_size = 1):
         return self.q_head.get_random_actions(batch_size)
 
-    @beartype
     def embed_texts(self, texts: list[str]):
         return self.conditioner.embed_texts(texts)
 
@@ -1265,6 +1299,13 @@ class QRoboticTransformer(Module):
         # attention
 
         attended_tokens = self.transformer(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = attn_mask)
+
+        # if dual critic, get a second opinion
+
+        if self.dual_critics:
+            attended_tokens_second_critic = self.second_transformer_critic(learned_tokens, cond_fns = transformer_cond_fns, attn_mask = attn_mask)
+
+            attended_tokens = rearrange([attended_tokens, attended_tokens_second_critic], 'critics b ... -> (critics b) ...')
 
         return attended_tokens
 
