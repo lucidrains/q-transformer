@@ -8,6 +8,8 @@ I will be keeping around the logic for Q-learning on single action just for fina
 
 The autoregressive Q-learning formulation has been reproduced by [Kotb et al.](https://arxiv.org/abs/2407.18841)
 
+[Q Learning is Not Yet Scalable](https://seohong.me/blog/q-learning-is-not-yet-scalable)
+
 ## Install
 
 ```bash
