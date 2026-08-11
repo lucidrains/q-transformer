@@ -1,0 +1,10 @@
+{
+    "summary": "This code imports necessary classes from different modules within the q_transformer package, including QRoboticTransformer, MaxViT, QLearner, Agent, ReplayMemoryDataset, and BaseEnvironment. These classes are used for building the transformer-based agent architecture and learning algorithms for reinforcement learning tasks.",
+    "details": [
+        {
+            "comment": "This code imports necessary classes from different modules within the q_transformer package, including QRoboticTransformer, MaxViT, QLearner, Agent, ReplayMemoryDataset, and BaseEnvironment. These classes are used for building the transformer-based agent architecture and learning algorithms for reinforcement learning tasks.",
+            "location": "\"/media/root/Prima/works/q-transformer/docs/src/q_transformer/__init__.py\":0-13",
+            "content": "from q_transformer.q_robotic_transformer import (\n    QRoboticTransformer,\n    MaxViT\n)\nfrom q_transformer.q_learner import (\n    QLearner\n)\nfrom q_transformer.agent import (\n    Agent,\n    ReplayMemoryDataset,\n    BaseEnvironment\n)"
+        }
+    ]
+}

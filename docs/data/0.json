@@ -1,0 +1,545 @@
+{
+    "0": {
+        "file_id": 0,
+        "content": "/README.md",
+        "type": "filepath"
+    },
+    "1": {
+        "file_id": 0,
+        "content": "The code installs the scalable offline reinforcement learning model, Q-Transformer, with encoder-decoder architecture and various action decoding techniques. It discusses RL expert consultations and mentions publications on delusional bias, randomized exploration, and \"FlashAttention\" manuscript.",
+        "type": "summary"
+    },
+    "2": {
+        "file_id": 0,
+        "content": "<img src=\"./q-transformer.png\" width=\"450px\"></img>\n## Q-transformer\nImplementation of <a href=\"https://qtransformer.github.io/\">Q-Transformer</a>, Scalable Offline Reinforcement Learning via Autoregressive Q-Functions, out of Google Deepmind\nI will be keeping around the logic for Q-learning on single action just for final comparison with the proposed autoregressive Q-learning on multiple actions. Also to serve as education for myself and the public.\n## Install\n```bash\n$ pip install q-transformer\n```\n## Usage\n```python\nimport torch\nfrom q_transformer import (\n    QRoboticTransformer,\n    QLearner,\n    Agent,\n    ReplayMemoryDataset\n)\n# the attention model\nmodel = QRoboticTransformer(\n    vit = dict(\n        num_classes = 1000,\n        dim_conv_stem = 64,\n        dim = 64,\n        dim_head = 64,\n        depth = (2, 2, 5, 2),\n        window_size = 7,\n        mbconv_expansion_rate = 4,\n        mbconv_shrinkage_rate = 0.25,\n        dropout = 0.1\n    ),\n    num_actions = 8,\n    action_bins = 256,\n    depth = 1,\n    heads = 8,",
+        "type": "code",
+        "location": "/README.md:1-44"
+    },
+    "3": {
+        "file_id": 0,
+        "content": "This code is for installing and using the \"q-transformer\" package, which implements Q-Transformer - a scalable offline reinforcement learning model from Google DeepMind. The model uses an attention mechanism in its Q-function to predict multiple actions at once, improving performance compared to traditional single action Q-learning. The code installs the package via pip and provides an example of how to use it with PyTorch, specifying the details of the attention model and Q-function.",
+        "type": "comment"
+    },
+    "4": {
+        "file_id": 0,
+        "content": "    dim_head = 64,\n    cond_drop_prob = 0.2,\n    dueling = True\n)\n# you need to supply your own environment, by overriding BaseEnvironment\nfrom q_transformer.mocks import MockEnvironment\nenv = MockEnvironment(\n    state_shape = (3, 6, 224, 224),\n    text_embed_shape = (768,)\n)\n# env.init()     should return instructions and initial state: Tuple[str, Tensor[*state_shape]]\n# env(actions)   should return rewards, next state, and done flag: Tuple[Tensor[()], Tensor[*state_shape], Tensor[()]]\n# agent is a class that allows the q-model to interact with the environment to generate a replay memory dataset for learning\nagent = Agent(\n    model,\n    environment = env,\n    num_episodes = 10000,\n    max_num_steps_per_episode = 1000,\n)\nagent()\n# Q learning on the replay memory dataset on the model\nq_learner = QLearner(\n    model,\n    dataset = ReplayMemoryDataset(),\n    num_train_steps = 10000,\n    learning_rate = 3e-4,\n    batch_size = 32\n)\nq_learner()\n# after much learning\n# your robot should be better at selecting optimal actions",
+        "type": "code",
+        "location": "/README.md:45-86"
+    },
+    "5": {
+        "file_id": 0,
+        "content": "The code initializes an environment (MockEnvironment) and two learning components: an Agent and a QLearner. The Agent interacts with the environment to generate a replay memory dataset for the model, and then the QLearner learns from this replay memory dataset. After much learning, the robot should be better at selecting optimal actions.",
+        "type": "comment"
+    },
+    "6": {
+        "file_id": 0,
+        "content": "video = torch.randn(2, 3, 6, 224, 224)\ninstructions = [\n    'bring me that apple sitting on the table',\n    'please pass the butter'\n]\nactions = model.get_optimal_actions(video, instructions)\n```\n## Appreciation\n- <a href=\"https://stability.ai/\">StabilityAI</a>, <a href=\"https://a16z.com/supporting-the-open-source-ai-community/\">A16Z Open Source AI Grant Program</a>, and <a href=\"https://huggingface.co/\">🤗 Huggingface</a> for the generous sponsorships, as well as my other sponsors, for affording me the independence to open source current artificial intelligence research\n## Todo\n- [x] first work way towards single action support\n- [x] offer batchnorm-less variant of maxvit, as done in SOTA weather model metnet3\n- [x] add optional deep dueling architecture\n- [x] add n-step Q learning\n- [x] build the conservative regularization\n- [x] build out main proposal in paper (autoregressive discrete actions until last action, reward given only on last)\n- [x] improvise decoder head variant, instead of concatenatin",
+        "type": "code",
+        "location": "/README.md:88-111"
+    },
+    "7": {
+        "file_id": 0,
+        "content": "The code initializes a random video, a list of instructions, and then calls the `get_optimal_actions` function from the model to get the actions for the given instructions. The model returns the optimal actions based on the provided video and instructions.",
+        "type": "comment"
+    },
+    "8": {
+        "file_id": 0,
+        "content": "g previous actions at the frames + learned tokens stage. in other words, use classic encoder - decoder\n    - [x] allow for cross attention to fine frame / learned tokens\n- [x] redo maxvit with axial rotary embeddings + sigmoid gating for attending to nothing. enable flash attention for maxvit with this change\n- [x] build out a simple dataset creator class, taking in the environment and model and returning a folder that can be accepted by a `ReplayDataset`\n    - [x] finish basic environment loop\n    - [x] store memories to memmapped files in designated folder\n    - [x] `ReplayDataset` that takes in folder\n        - [x] 1 time step option\n        - [x] n-time steps\n- [x] handle multiple instructions correctly\n- [x] show a simple end-to-end example, in the same style as all other repos\n- [x] handle no instructions, leverage null conditioner in CFG library\n- [x] cache kv for action decoding\n- [x] for exploration, allow for finely randomizing a subset of actions, and not all actions at once\n    - [ ] also allow for gumbel based sampling of actions, with annealing of gumbel noise",
+        "type": "code",
+        "location": "/README.md:111-125"
+    },
+    "9": {
+        "file_id": 0,
+        "content": "This code outlines tasks for building a model that uses classic encoder-decoder architecture, allowing for cross attention to fine frames and learned tokens. It mentions adding axial rotary embeddings and sigmoid gating for attending to nothing. The code also includes building a simple dataset creator class, handling multiple instructions correctly, and creating an end-to-end example. It caches kv for action decoding, considers no instructions using null conditioner, and explores finely randomizing actions or using Gumbel-based sampling with annealing noise.",
+        "type": "comment"
+    },
+    "10": {
+        "file_id": 0,
+        "content": "- [ ] consult some RL experts and figure out if there are any new headways into resolving <a href=\"https://www.cs.toronto.edu/~cebly/Papers/CONQUR_ICML_2020_camera_ready.pdf\">delusional bias</a>\n- [ ] figure out if one can train with randomized orders of actions - order could be sent as a conditioning that is concatted or summed before attention layers\n    - [ ] offer an improvised variant where the first action token suggests the action ordering. all actions aren't made equal, and some may need to attend to past actions more than others\n- [ ] simple beam search function for optimal actions\n- [ ] improvise cross attention to past actions and states of timestep, transformer-xl fashion (w/ structured memory dropout)\n- [ ] see if the main idea in this paper is applicable to language models <a href=\"https://github.com/lucidrains/llama-qrlhf\">here</a>\n## Citations\n```bibtex\n@inproceedings{qtransformer,\n    title   = {Q-Transformer: Scalable Offline Reinforcement Learning via Autoregressive Q-Functions},",
+        "type": "code",
+        "location": "/README.md:127-138"
+    },
+    "11": {
+        "file_id": 0,
+        "content": "This code snippet appears to be a list of tasks or features for a Q-Transformer model, as mentioned in the \"q-transformer/README.md\" file. The tasks include consulting RL experts on delusional bias, exploring randomized action orders, suggesting an improvised variant with varying attention to past actions, creating a beam search function for optimal actions, adding cross attention like Transformer-XL, and potentially applying the main idea from a specific paper to language models.",
+        "type": "comment"
+    },
+    "12": {
+        "file_id": 0,
+        "content": "    authors = {Yevgen Chebotar and Quan Vuong and Alex Irpan and Karol Hausman and Fei Xia and Yao Lu and Aviral Kumar and Tianhe Yu and Alexander Herzog and Karl Pertsch and Keerthana Gopalakrishnan and Julian Ibarz and Ofir Nachum and Sumedh Sontakke and Grecia Salazar and Huong T Tran and Jodilyn Peralta and Clayton Tan and Deeksha Manjunath and Jaspiar Singht and Brianna Zitkovich and Tomas Jackson and Kanishka Rao and Chelsea Finn and Sergey Levine},\n    booktitle = {7th Annual Conference on Robot Learning},\n    year   = {2023}\n}\n```\n```bibtex\n@inproceedings{dao2022flashattention,\n    title   = {Flash{A}ttention: Fast and Memory-Efficient Exact Attention with {IO}-Awareness},\n    author  = {Dao, Tri and Fu, Daniel Y. and Ermon, Stefano and Rudra, Atri and R{\\'e}, Christopher},\n    booktitle = {Advances in Neural Information Processing Systems},\n    year    = {2022}\n}\n```",
+        "type": "code",
+        "location": "/README.md:139-152"
+    },
+    "13": {
+        "file_id": 0,
+        "content": "This code snippet contains two entries for academic publications, formatted in the BibTeX style. The first entry appears to be a conference paper from the 7th Annual Conference on Robot Learning with multiple authors. The second entry is an unpublished manuscript titled \"FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness\" by four authors, published in the Advances in Neural Information Processing Systems conference in 2022.",
+        "type": "comment"
+    },
+    "14": {
+        "file_id": 1,
+        "content": "/q_transformer/__init__.py",
+        "type": "filepath"
+    },
+    "15": {
+        "file_id": 1,
+        "content": "This code imports necessary classes from different modules within the q_transformer package, including QRoboticTransformer, MaxViT, QLearner, Agent, ReplayMemoryDataset, and BaseEnvironment. These classes are used for building the transformer-based agent architecture and learning algorithms for reinforcement learning tasks.",
+        "type": "summary"
+    },
+    "16": {
+        "file_id": 1,
+        "content": "from q_transformer.q_robotic_transformer import (\n    QRoboticTransformer,\n    MaxViT\n)\nfrom q_transformer.q_learner import (\n    QLearner\n)\nfrom q_transformer.agent import (\n    Agent,\n    ReplayMemoryDataset,\n    BaseEnvironment\n)",
+        "type": "code",
+        "location": "/q_transformer/__init__.py:1-14"
+    },
+    "17": {
+        "file_id": 1,
+        "content": "This code imports necessary classes from different modules within the q_transformer package, including QRoboticTransformer, MaxViT, QLearner, Agent, ReplayMemoryDataset, and BaseEnvironment. These classes are used for building the transformer-based agent architecture and learning algorithms for reinforcement learning tasks.",
+        "type": "comment"
+    },
+    "18": {
+        "file_id": 2,
+        "content": "/q_transformer/agent.py",
+        "type": "filepath"
+    },
+    "19": {
+        "file_id": 2,
+        "content": "This code initializes and trains a Q-Transformer agent in a reinforcement learning task, storing experiences in memory buffers. It handles environment details, epsilon parameters, rewards, actions, and memories for each episode until completion.",
+        "type": "summary"
+    },
+    "20": {
+        "file_id": 2,
+        "content": "from pathlib import Path\nfrom numpy.lib.format import open_memmap\nimport torch\nfrom torch import nn, einsum, Tensor\nfrom torch.nn import Module, ModuleList\nfrom torch.utils.data import Dataset\nfrom einops import rearrange\nfrom q_transformer.q_robotic_transformer import QRoboticTransformer\nfrom torchtyping import TensorType\nfrom beartype import beartype\nfrom beartype.typing import Iterator, Tuple, Union\nfrom tqdm import tqdm\n# constants\nTEXT_EMBEDS_FILENAME = 'text_embeds.memmap.npy'\nSTATES_FILENAME = 'states.memmap.npy'\nACTIONS_FILENAME = 'actions.memmap.npy'\nREWARDS_FILENAME = 'rewards.memmap.npy'\nDONES_FILENAME = 'dones.memmap.npy'\nDEFAULT_REPLAY_MEMORIES_FOLDER = './replay_memories_data'\n# helpers\ndef exists(v):\n    return v is not None\ndef cast_tuple(t):\n    return (t,) if not isinstance(t, tuple) else t\n# replay memory dataset\nclass ReplayMemoryDataset(Dataset):\n    @beartype\n    def __init__(\n        self,\n        folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,\n        num_timesteps: int = 1\n    ):\n        assert num_timesteps >= 1",
+        "type": "code",
+        "location": "/q_transformer/agent.py:1-48"
+    },
+    "21": {
+        "file_id": 2,
+        "content": "The code defines a `ReplayMemoryDataset` class, which is a subclass of `torch.utils.data.Dataset`. It loads data from memory maps in specified filenames and uses the given folder for storing these memory maps. The constructor also takes an optional argument `num_timesteps`, which should be greater than or equal to 1.",
+        "type": "comment"
+    },
+    "22": {
+        "file_id": 2,
+        "content": "        self.is_single_timestep = num_timesteps == 1\n        self.num_timesteps = num_timesteps\n        folder = Path(folder)\n        assert folder.exists() and folder.is_dir()\n        text_embeds_path = folder / TEXT_EMBEDS_FILENAME\n        states_path = folder / STATES_FILENAME\n        actions_path = folder / ACTIONS_FILENAME\n        rewards_path = folder / REWARDS_FILENAME\n        dones_path = folder / DONES_FILENAME\n        self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'r')\n        self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')\n        self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')\n        self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')\n        self.dones = open_memmap(str(dones_path), dtype = 'bool', mode = 'r')\n        self.num_timesteps = num_timesteps\n        # calculate episode length based on dones\n        # filter out any episodes that are insufficient in length\n        self.episode_length = (self.dones.cumsum(axis = -1) == 0).sum(axis = -1) + 1",
+        "type": "code",
+        "location": "/q_transformer/agent.py:49-72"
+    },
+    "23": {
+        "file_id": 2,
+        "content": "This code initializes the agent's attributes by checking if the given folder exists and is a directory. It then opens memory-mapped files for text embeddings, states, actions, rewards, and done signals in read mode. The episode length is calculated based on dones, and the number of timesteps is set.",
+        "type": "comment"
+    },
+    "24": {
+        "file_id": 2,
+        "content": "        trainable_episode_indices = self.episode_length >= num_timesteps\n        self.text_embeds = self.text_embeds[trainable_episode_indices]\n        self.states = self.states[trainable_episode_indices]\n        self.actions = self.actions[trainable_episode_indices]\n        self.rewards = self.rewards[trainable_episode_indices]\n        self.dones = self.dones[trainable_episode_indices]\n        self.episode_length = self.episode_length[trainable_episode_indices]\n        assert self.dones.size > 0, 'no trainable episodes'\n        self.num_episodes, self.max_episode_len = self.dones.shape\n        timestep_arange = torch.arange(self.max_episode_len)\n        timestep_indices = torch.stack(torch.meshgrid(\n            torch.arange(self.num_episodes),\n            timestep_arange\n        ), dim = -1)\n        trainable_mask = timestep_arange < rearrange(torch.from_numpy(self.episode_length) - num_timesteps, 'e -> e 1')\n        self.indices = timestep_indices[trainable_mask]\n    def __len__(self):\n        return self.indices.shape[0]",
+        "type": "code",
+        "location": "/q_transformer/agent.py:74-99"
+    },
+    "25": {
+        "file_id": 2,
+        "content": "This code segment is part of an agent's class, which involves training episodes based on the given number of timesteps. It selects trainable episodes based on the episode length and creates trainable mask and indices for further processing.",
+        "type": "comment"
+    },
+    "26": {
+        "file_id": 2,
+        "content": "    def __getitem__(self, idx):\n        episode_index, timestep_index = self.indices[idx]\n        timestep_slice = slice(timestep_index, (timestep_index + self.num_timesteps))\n        text_embeds = self.text_embeds[episode_index, timestep_slice]\n        states = self.states[episode_index, timestep_slice]\n        actions = self.actions[episode_index, timestep_slice]\n        rewards = self.rewards[episode_index, timestep_slice]\n        dones = self.dones[episode_index, timestep_slice]\n        next_state = self.states[episode_index, min(timestep_index, self.max_episode_len - 1)]\n        return text_embeds, states, actions, next_state, rewards, dones\n# base environment class to extend\nclass BaseEnvironment(Module):\n    @beartype\n    def __init__(\n        self,\n        *,\n        state_shape: Tuple[int, ...],\n        text_embed_shape: Union[int, Tuple[int, ...]]\n    ):\n        super().__init__()\n        self.state_shape = state_shape\n        self.text_embed_shape = cast_tuple(text_embed_shape)\n        self.register_buffer('dummy', torch.zeros(0), persistent = False)",
+        "type": "code",
+        "location": "/q_transformer/agent.py:101-129"
+    },
+    "27": {
+        "file_id": 2,
+        "content": "The code defines a BaseEnvironment class that extends a module, takes state_shape and text_embed_shape as input parameters, and registers a buffer called 'dummy'. The __getitem__ method returns text_embeds, states, actions, next_state, rewards, and dones based on the provided index.",
+        "type": "comment"
+    },
+    "28": {
+        "file_id": 2,
+        "content": "    @property\n    def device(self):\n        return self.dummy.device\n    def init(self) -> Tuple[str, Tensor]: # (instruction, initial state)\n        raise NotImplementedError\n    def forward(\n        self,\n        actions: Tensor\n    ) -> Tuple[\n        TensorType[(), float],     # reward\n        Tensor,                    # next state\n        TensorType[(), bool]       # done\n    ]:\n        raise NotImplementedError\n# agent class\nclass Agent(Module):\n    @beartype\n    def __init__(\n        self,\n        q_transformer: QRoboticTransformer,\n        *,\n        environment: BaseEnvironment,\n        memories_dataset_folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,\n        num_episodes: int = 1000,\n        max_num_steps_per_episode: int = 10000,\n        epsilon_start: float = 0.25,\n        epsilon_end: float = 0.001,\n        num_steps_to_target_epsilon: int = 1000\n    ):\n        super().__init__()\n        self.q_transformer = q_transformer\n        condition_on_text = q_transformer.condition_on_text\n        self.condition_on_text = condition_on_text",
+        "type": "code",
+        "location": "/q_transformer/agent.py:131-168"
+    },
+    "29": {
+        "file_id": 2,
+        "content": "The code defines an Agent class that takes a QRoboticTransformer as input and initializes its attributes. It also sets the condition_on_text attribute from the q_transformer's condition_on_text value. The class has not implemented the init, forward, or device methods yet.",
+        "type": "comment"
+    },
+    "30": {
+        "file_id": 2,
+        "content": "        self.environment = environment\n        assert hasattr(environment, 'state_shape') and hasattr(environment, 'text_embed_shape')\n        assert 0. <= epsilon_start <= 1.\n        assert 0. <= epsilon_end <= 1.\n        assert epsilon_start >= epsilon_end\n        self.epsilon_start = epsilon_start\n        self.epsilon_end = epsilon_end\n        self.num_steps_to_target_epsilon = num_steps_to_target_epsilon\n        self.epsilon_slope = (epsilon_end - epsilon_start) / num_steps_to_target_epsilon\n        self.num_episodes = num_episodes\n        self.max_num_steps_per_episode = max_num_steps_per_episode\n        mem_path = Path(memories_dataset_folder)\n        self.memories_dataset_folder = mem_path\n        mem_path.mkdir(exist_ok = True, parents = True)\n        assert mem_path.is_dir()\n        states_path = mem_path / STATES_FILENAME\n        actions_path = mem_path / ACTIONS_FILENAME\n        rewards_path = mem_path / REWARDS_FILENAME\n        dones_path = mem_path / DONES_FILENAME\n        prec_shape = (num_episodes, max_num_steps_per_episode)",
+        "type": "code",
+        "location": "/q_transformer/agent.py:170-197"
+    },
+    "31": {
+        "file_id": 2,
+        "content": "This code initializes an agent for a Q-transformer, setting environment details and epsilon parameters. It also creates memory file paths for states, actions, rewards, and done flags, defining their shapes based on number of episodes and max steps per episode.",
+        "type": "comment"
+    },
+    "32": {
+        "file_id": 2,
+        "content": "        num_actions = q_transformer.num_actions\n        state_shape = environment.state_shape\n        if condition_on_text:\n            text_embeds_path = mem_path / TEXT_EMBEDS_FILENAME\n            text_embed_shape = environment.text_embed_shape\n            self.text_embed_shape = text_embed_shape\n            self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *text_embed_shape))\n        self.states      = open_memmap(str(states_path), dtype = 'float32', mode = 'w+', shape = (*prec_shape, *state_shape))\n        self.actions     = open_memmap(str(actions_path), dtype = 'int', mode = 'w+', shape = (*prec_shape, num_actions))\n        self.rewards     = open_memmap(str(rewards_path), dtype = 'float32', mode = 'w+', shape = prec_shape)\n        self.dones       = open_memmap(str(dones_path), dtype = 'bool', mode = 'w+', shape = prec_shape)\n    def get_epsilon(self, step):\n        return max(self.epsilon_end, self.epsilon_slope * float(step) + self.epsilon_start)",
+        "type": "code",
+        "location": "/q_transformer/agent.py:198-214"
+    },
+    "33": {
+        "file_id": 2,
+        "content": "The code defines a class with methods for initializing memory maps for states, actions, rewards, and done status. It also includes a method to get the epsilon value at a given step. The epsilon value is calculated using a linear function that increases from start to end values. The code assumes certain environment properties like state_shape, num_actions, and text_embed_shape are defined beforehand.",
+        "type": "comment"
+    },
+    "34": {
+        "file_id": 2,
+        "content": "    @beartype\n    @torch.no_grad()\n    def forward(self):\n        self.q_transformer.eval()\n        for episode in range(self.num_episodes):\n            print(f'episode {episode}')\n            instruction, curr_state = self.environment.init()\n            for step in tqdm(range(self.max_num_steps_per_episode)):\n                last_step = step == (self.max_num_steps_per_episode - 1)\n                epsilon = self.get_epsilon(step)\n                text_embed = None\n                if self.condition_on_text:\n                    text_embed = self.q_transformer.embed_texts([instruction])\n                actions = self.q_transformer.get_actions(\n                    rearrange(curr_state, '... -> 1 ...'),\n                    text_embeds = text_embed,\n                    prob_random_action = epsilon\n                )\n                reward, next_state, done = self.environment(actions)\n                done = done | last_step\n                # store memories using memmap, for later reflection and learning\n                if self.condition_on_text:",
+        "type": "code",
+        "location": "/q_transformer/agent.py:216-248"
+    },
+    "35": {
+        "file_id": 2,
+        "content": "This code defines the forward function for an agent in a Q-Transformer model. It evaluates the Q-Transformer, iterates through episodes, and performs actions based on whether to condition on text or not. The agent interacts with an environment, receives rewards and next states, and stores memories using memmap for later reflection and learning.",
+        "type": "comment"
+    },
+    "36": {
+        "file_id": 2,
+        "content": "                    assert text_embed.shape[1:] == self.text_embed_shape\n                    self.text_embeds[episode, step] = text_embed\n                self.states[episode, step]      = curr_state\n                self.actions[episode, step]     = actions\n                self.rewards[episode, step]     = reward\n                self.dones[episode, step]       = done\n                # if done, move onto next episode\n                if done:\n                    break\n                # set next state\n                curr_state = next_state\n            if self.condition_on_text:\n                self.text_embeds.flush()\n            self.states.flush()\n            self.actions.flush()\n            self.rewards.flush()\n            self.dones.flush()\n        print(f'completed, memories stored to {self.memories_dataset_folder.resolve()}')",
+        "type": "code",
+        "location": "/q_transformer/agent.py:249-274"
+    },
+    "37": {
+        "file_id": 2,
+        "content": "This code snippet stores experiences of an agent in a reinforcement learning task. It checks the shape of text embeddings, saves the current state, action taken, reward received, and done status for each step in episodes. If done, it breaks the loop and moves onto the next episode. After all steps are processed, it flushes memory buffers and prints a completion message with the storage folder location.",
+        "type": "comment"
+    },
+    "38": {
+        "file_id": 3,
+        "content": "/q_transformer/attend.py",
+        "type": "filepath"
+    },
+    "39": {
+        "file_id": 3,
+        "content": "This code defines a class for attention-based neural network operations using PyTorch, incorporating dropout regularization and optional flash attention for efficiency. It computes attention scores, applies masks and dropout, uses scaled dot product mechanism, and aggregates values with Einstein summation.",
+        "type": "summary"
+    },
+    "40": {
+        "file_id": 3,
+        "content": "from functools import wraps\nfrom packaging import version\nimport torch\nfrom torch import nn, einsum\nimport torch.nn.functional as F\nfrom einops import rearrange, reduce\n# helpers\ndef once(fn):\n    called = False\n    @wraps(fn)\n    def inner(x):\n        nonlocal called\n        if called:\n            return\n        called = True\n        return fn(x)\n    return inner\nprint_once = once(print)\n# helpers\ndef exists(val):\n    return val is not None\ndef default(val, d):\n    return val if exists(val) else d\ndef maybe_reduce_mask_and(*maybe_masks):\n    maybe_masks = [*filter(exists, maybe_masks)]\n    if len(maybe_masks) == 0:\n        return None\n    mask, *rest_masks = maybe_masks\n    for rest_mask in rest_masks:\n        mask = mask & rest_mask\n    return mask\n# main class\nclass Attend(nn.Module):\n    def __init__(\n        self,\n        dropout = 0.,\n        flash = False,\n        causal = False,\n        flash_config: dict = dict(\n            enable_flash = True,\n            enable_math = True,\n            enable_mem_efficient = True\n        )",
+        "type": "code",
+        "location": "/q_transformer/attend.py:1-58"
+    },
+    "41": {
+        "file_id": 3,
+        "content": "This code defines a class called Attend, which is a neural network module for attention-based operations. It uses the PyTorch framework and includes several helper functions for dropout, masking, and processing multiple masks. The class has configurable parameters for dropout rate, causal attention, and flash operation configuration (enable_flash, enable_math, enable_mem_efficient).",
+        "type": "comment"
+    },
+    "42": {
+        "file_id": 3,
+        "content": "    ):\n        super().__init__()\n        self.dropout = dropout\n        self.attn_dropout = nn.Dropout(dropout)\n        self.causal = causal\n        self.flash = flash\n        assert not (flash and version.parse(torch.__version__) < version.parse('2.0.0')), 'in order to use flash attention, you must be using pytorch 2.0 or above'\n        if flash:\n            print_once('using memory efficient attention')\n        self.flash_config = flash_config\n    def flash_attn(self, q, k, v, mask = None, attn_mask = None):\n        _, heads, q_len, dim_head, k_len, is_cuda, device = *q.shape, k.shape[-2], q.is_cuda, q.device\n        # Check if mask exists and expand to compatible shape\n        # The mask is B L, so it would have to be expanded to B H N L\n        if exists(mask):\n            mask = mask.expand(-1, heads, q_len, -1)\n        mask = maybe_reduce_mask_and(mask, attn_mask)\n        # pytorch 2.0 flash attn: q, k, v, mask, dropout, softmax_scale\n        with torch.backends.cuda.sdp_kernel(**self.flash_config):",
+        "type": "code",
+        "location": "/q_transformer/attend.py:59-86"
+    },
+    "43": {
+        "file_id": 3,
+        "content": "This code is defining a class for a self-attention mechanism, which uses dropout regularization and has an optional flash attention implementation for memory efficiency. The flash_attn method performs the self-attention operation, taking in queries (q), keys (k), and values (v) along with optional masking. If a mask exists, it is expanded to the required shape before applying the self-attention operation using pytorch 2.0's flash attention implementation.",
+        "type": "comment"
+    },
+    "44": {
+        "file_id": 3,
+        "content": "            out = F.scaled_dot_product_attention(\n                q, k, v,\n                attn_mask = mask,\n                is_causal = self.causal,\n                dropout_p = self.dropout if self.training else 0.\n            )\n        return out\n    def forward(self, q, k, v, mask = None, attn_mask = None):\n        \"\"\"\n        einstein notation\n        b - batch\n        h - heads\n        n, i, j - sequence length (base sequence length, source, target)\n        d - feature dimension\n        \"\"\"\n        q_len, k_len, device = q.shape[-2], k.shape[-2], q.device\n        scale = q.shape[-1] ** -0.5\n        if exists(mask) and mask.ndim != 4:\n            mask = rearrange(mask, 'b j -> b 1 1 j')\n        if self.flash:\n            return self.flash_attn(q, k, v, mask = mask, attn_mask = attn_mask)\n        # similarity\n        sim = einsum(f\"b h i d, b h j d -> b h i j\", q, k) * scale\n        # causal mask\n        if self.causal:\n            i, j = sim.shape[-2:]\n            causal_mask = torch.ones((i, j), dtype = torch.bool, device = sim.device).triu(j - i + 1)",
+        "type": "code",
+        "location": "/q_transformer/attend.py:87-123"
+    },
+    "45": {
+        "file_id": 3,
+        "content": "The function calculates the attention scores and returns them, applying causality and dropout if necessary. It uses scaled dot product attention mechanism in Einstein notation, performs scaling of the queries, applies masking if provided, and has an optional flash attn implementation. The code also handles causal masks by using a triangle upper matrix and applies dropout during training.",
+        "type": "comment"
+    },
+    "46": {
+        "file_id": 3,
+        "content": "            sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)\n        # key padding mask\n        if exists(mask):\n            sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)\n        # attention mask\n        if exists(attn_mask):\n            sim = sim.masked_fill(~attn_mask, -torch.finfo(sim.dtype).max)\n        # attention\n        attn = sim.softmax(dim=-1)\n        attn = self.attn_dropout(attn)\n        # aggregate values\n        out = einsum(f\"b h i j, b h j d -> b h i d\", attn, v)\n        return out",
+        "type": "code",
+        "location": "/q_transformer/attend.py:124-145"
+    },
+    "47": {
+        "file_id": 3,
+        "content": "This code computes the attention scores and applies masks before computing attention. It fills values that should be ignored with the maximum possible negative value to prevent influence on the results. Then, it softmax normalizes the attention scores and applies dropout for regularization. Finally, it aggregates the values using Einstein summation.",
+        "type": "comment"
+    },
+    "48": {
+        "file_id": 4,
+        "content": "/q_transformer/mocks.py",
+        "type": "filepath"
+    },
+    "49": {
+        "file_id": 4,
+        "content": "This class creates mock environments and datasets for Q-transformer models in reinforcement learning. The custom dataloader supports multiple steps per experience, stochastic actions, and defined time_shape, num_action_bins, and video_shape.",
+        "type": "summary"
+    },
+    "50": {
+        "file_id": 4,
+        "content": "from random import randrange\nimport torch\nfrom torch.utils.data import Dataset\nfrom beartype.typing import Tuple, Optional\nfrom torchtyping import TensorType\nfrom q_transformer.agent import BaseEnvironment\nclass MockEnvironment(BaseEnvironment):\n    def init(self) -> Tuple[\n        Optional[str],\n        TensorType[float]\n    ]:\n        return 'please clean the kitchen', torch.randn(self.state_shape, device = self.device)\n    def forward(self, actions) -> Tuple[\n        TensorType[(), float],\n        TensorType[float],\n        TensorType[(), bool]\n    ]:\n        rewards = torch.randn((), device = self.device)\n        next_states = torch.randn(self.state_shape, device = self.device)\n        done = torch.zeros((), device = self.device, dtype = torch.bool)\n        return rewards, next_states, done\nclass MockReplayDataset(Dataset):\n    def __init__(\n        self,\n        length = 10000,\n        num_actions = 1,\n        num_action_bins = 256,\n        video_shape = (6, 224, 224)\n    ):\n        self.length = length\n        self.num_actions = num_actions",
+        "type": "code",
+        "location": "/q_transformer/mocks.py:1-38"
+    },
+    "51": {
+        "file_id": 4,
+        "content": "This code defines a mock environment and replay dataset for a Q-transformer model. The MockEnvironment class has an init method that returns an initial state and reward, and a forward method that returns rewards, next states, and done signals. The MockReplayDataset class initializes with parameters for length, number of actions, action bins, and video shape.",
+        "type": "comment"
+    },
+    "52": {
+        "file_id": 4,
+        "content": "        self.num_action_bins = num_action_bins\n        self.video_shape = video_shape\n    def __len__(self):\n        return self.length\n    def __getitem__(self, _):\n        instruction = \"please clean the kitchen\"\n        state = torch.randn(3, *self.video_shape)\n        if self.num_actions == 1:\n            action = torch.tensor(randrange(self.num_action_bins + 1))\n        else:\n            action = torch.randint(0, self.num_action_bins + 1, (self.num_actions,))\n        next_state = torch.randn(3, *self.video_shape)\n        reward = torch.tensor(randrange(2))\n        done = torch.tensor(randrange(2), dtype = torch.bool)\n        return instruction, state, action, next_state, reward, done\nclass MockReplayNStepDataset(Dataset):\n    def __init__(\n        self,\n        length = 10000,\n        num_steps = 2,\n        num_actions = 1,\n        num_action_bins = 256,\n        video_shape = (6, 224, 224)\n    ):\n        self.num_steps = num_steps\n        self.time_shape = (num_steps,)\n        self.length = length\n        self.num_actions = num_actions",
+        "type": "code",
+        "location": "/q_transformer/mocks.py:39-73"
+    },
+    "53": {
+        "file_id": 4,
+        "content": "The code defines a class, \"MockReplayNStepDataset\", that generates a dataset of experiences for training a reinforcement learning agent. It has parameters such as length (number of experiences), num_steps (number of timesteps per experience), num_actions (number of actions per timestep), num_action_bins (number of possible action bins), and video_shape (size of the video frame). The class initializes these parameters and defines a __getitem__ method that returns an experience for a given index. It also includes a nested class \"MockActionDistribution\" for handling actions, which can be either deterministic or stochastic.",
+        "type": "comment"
+    },
+    "54": {
+        "file_id": 4,
+        "content": "        self.num_action_bins = num_action_bins\n        self.video_shape = video_shape\n    def __len__(self):\n        return self.length\n    def __getitem__(self, _):\n        action_dims = (self.num_actions,) if self.num_actions > 1 else tuple()\n        instruction = \"please clean the kitchen\"\n        state = torch.randn(*self.time_shape, 3, *self.video_shape)\n        action = torch.randint(0, self.num_action_bins + 1, (*self.time_shape, *action_dims))\n        next_state = torch.randn(3, *self.video_shape)\n        reward = torch.randint(0, 2, self.time_shape)\n        done = torch.zeros(self.time_shape, dtype = torch.bool)\n        return instruction, state, action, next_state, reward, done",
+        "type": "code",
+        "location": "/q_transformer/mocks.py:74-91"
+    },
+    "55": {
+        "file_id": 4,
+        "content": "This class is a custom dataloader for RL tasks, with time_shape, num_action_bins, and video_shape defined. It defines __len__ and __getitem__ methods to return instructions, states, actions, next_states, rewards, and done masks in each iteration. The state shape is (time, 3, *video_shape), and the action bins are randomly sampled based on num_action_bins.",
+        "type": "comment"
+    },
+    "56": {
+        "file_id": 5,
+        "content": "/q_transformer/optimizer.py",
+        "type": "filepath"
+    },
+    "57": {
+        "file_id": 5,
+        "content": "This code defines two functions: `separate_weight_decayable_params` and `get_adam_optimizer`. The first function separates parameters into those with weight decay (`wd_params`) and those without (`no_wd_params`). The second function gets an Adam optimizer based on the given parameters, learning rate (lr), weight decay (wd), betas, epsilon, whether to filter by requires_grad, and whether to group wd_params. If weight decay is greater than 0, it separates parameters into groups with and without weight decay. Then, it returns an Adam optimizer if there's no weight decay, or an AdamW optimizer if there is weight decay.",
+        "type": "summary"
+    },
+    "58": {
+        "file_id": 5,
+        "content": "from torch.optim import AdamW, Adam\ndef separate_weight_decayable_params(params):\n    wd_params, no_wd_params = [], []\n    for param in params:\n        param_list = no_wd_params if param.ndim < 2 else wd_params\n        param_list.append(param)\n    return wd_params, no_wd_params\ndef get_adam_optimizer(\n    params,\n    lr = 1e-4,\n    wd = 1e-2,\n    betas = (0.9, 0.99),\n    eps = 1e-8,\n    filter_by_requires_grad = False,\n    group_wd_params = True\n):\n    has_wd = wd > 0\n    if filter_by_requires_grad:\n        params = list(filter(lambda t: t.requires_grad, params))\n    if group_wd_params and has_wd:\n        wd_params, no_wd_params = separate_weight_decayable_params(params)\n        params = [\n            {'params': wd_params},\n            {'params': no_wd_params, 'weight_decay': 0},\n        ]\n    if not has_wd:\n        return Adam(params, lr = lr, betas = betas, eps = eps)\n    return AdamW(params, lr = lr, weight_decay = wd, betas = betas, eps = eps)",
+        "type": "code",
+        "location": "/q_transformer/optimizer.py:1-35"
+    },
+    "59": {
+        "file_id": 5,
+        "content": "This code defines two functions: `separate_weight_decayable_params` and `get_adam_optimizer`. The first function separates parameters into those with weight decay (`wd_params`) and those without (`no_wd_params`). The second function gets an Adam optimizer based on the given parameters, learning rate (lr), weight decay (wd), betas, epsilon, whether to filter by requires_grad, and whether to group wd_params. If weight decay is greater than 0, it separates parameters into groups with and without weight decay. Then, it returns an Adam optimizer if there's no weight decay, or an AdamW optimizer if there is weight decay.",
+        "type": "comment"
+    },
+    "60": {
+        "file_id": 6,
+        "content": "/q_transformer/q_learner.py",
+        "type": "filepath"
+    },
+    "61": {
+        "file_id": 6,
+        "content": "QLearner class for reinforcement learning on robotic transformer models, utilizing named tuples and initializing components, uses QTransformer model with training parameters for Q-learning, includes autoregressive_q_learn function for updating Q-values and supports various Q-learning types. Trains using accelerator and saves checkpoints periodically.",
+        "type": "summary"
+    },
+    "62": {
+        "file_id": 6,
+        "content": "from pathlib import Path\nfrom functools import partial\nfrom contextlib import nullcontext\nfrom collections import namedtuple\nimport torch\nimport torch.nn.functional as F\nimport torch.distributed as dist\nfrom torch import nn, einsum, Tensor\nfrom torch.nn import Module, ModuleList\nfrom torch.utils.data import Dataset, DataLoader\nfrom torchtyping import TensorType\nfrom einops import rearrange, repeat, pack, unpack\nfrom einops.layers.torch import Rearrange\nfrom beartype import beartype\nfrom beartype.typing import Optional, Union, List, Tuple\nfrom q_transformer.q_robotic_transformer import QRoboticTransformer\nfrom q_transformer.optimizer import get_adam_optimizer\nfrom accelerate import Accelerator\nfrom accelerate.utils import DistributedDataParallelKwargs\nfrom ema_pytorch import EMA\n# constants\nQIntermediates = namedtuple('QIntermediates', [\n    'q_pred_all_actions',\n    'q_pred',\n    'q_next',\n    'q_target'\n])\nLosses = namedtuple('Losses', [\n    'td_loss',\n    'conservative_reg_loss'\n])\n# helpers\ndef exists(val):\n    return val is not None",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:1-47"
+    },
+    "63": {
+        "file_id": 6,
+        "content": "This code imports various libraries and defines a named tuple called QIntermediates and another one called Losses. It also provides a helper function called exists() to check if a value is None or not. The code appears to be part of a larger module for Reinforcement Learning, specifically using the Quantile Regression method. The named tuples are likely used to store intermediate results from the Q-learning algorithm and losses calculated during training.",
+        "type": "comment"
+    },
+    "64": {
+        "file_id": 6,
+        "content": "def default(val, d):\n    return val if exists(val) else d\ndef is_divisible(num, den):\n    return (num % den) == 0\ndef pack_one(t, pattern):\n    return pack([t], pattern)\ndef unpack_one(t, ps, pattern):\n    return unpack(t, ps, pattern)[0]\ndef cycle(dl):\n    while True:\n        for batch in dl:\n            yield batch\n# tensor helpers\ndef batch_select_indices(t, indices):\n    indices = rearrange(indices, '... -> ... 1')\n    selected = t.gather(-1, indices)\n    return rearrange(selected, '... 1 -> ...')\n# Q learning on robotic transformer\nclass QLearner(Module):\n    @beartype\n    def __init__(\n        self,\n        model: Union[QRoboticTransformer, Module],\n        *,\n        dataset: Dataset,\n        batch_size: int,\n        num_train_steps: int,\n        learning_rate: float,\n        min_reward: float = 0.,\n        grad_accum_every: int = 1,\n        monte_carlo_return: Optional[float] = None,\n        weight_decay: float = 0.,\n        accelerator: Optional[Accelerator] = None,\n        accelerator_kwargs: dict = dict(),\n        dataloader_kwargs: dict = dict(",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:49-92"
+    },
+    "65": {
+        "file_id": 6,
+        "content": "This code defines a QLearner class for reinforcement learning on robotic transformer models. It includes functions for batch selection, gradient accumulation, and Monte Carlo returns. The QLearner class takes in a model (QRoboticTransformer or Module), dataset, batch size, number of training steps, learning rate, minimum reward, grad accumulation frequency, optional Monte Carlo return, weight decay, accelerator, and dataloader kwargs as parameters.",
+        "type": "comment"
+    },
+    "66": {
+        "file_id": 6,
+        "content": "            shuffle = True\n        ),\n        q_target_ema_kwargs: dict = dict(\n            beta = 0.99,\n            update_after_step = 10,\n            update_every = 5\n        ),\n        max_grad_norm = 0.5,\n        n_step_q_learning = False,\n        discount_factor_gamma = 0.98,\n        conservative_reg_loss_weight = 1., # they claim 1. is best in paper\n        optimizer_kwargs: dict = dict(),\n        checkpoint_folder = './checkpoints',\n        checkpoint_every = 1000,\n    ):\n        super().__init__()\n        self.is_multiple_actions = model.num_actions > 1\n        # q-learning related hyperparameters\n        self.discount_factor_gamma = discount_factor_gamma\n        self.n_step_q_learning = n_step_q_learning\n        self.has_conservative_reg_loss = conservative_reg_loss_weight > 0.\n        self.conservative_reg_loss_weight = conservative_reg_loss_weight\n        self.register_buffer('discount_matrix', None, persistent = False)\n        # online (evaluated) Q model\n        self.model = model\n        # ema (target) Q model",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:93-126"
+    },
+    "67": {
+        "file_id": 6,
+        "content": "This code snippet defines a class for a Q-learner in a reinforcement learning algorithm. It takes various hyperparameters such as the discount factor, whether to use n-step Q-learning, and conservative regularization loss weight. The class also initializes an online (evaluated) Q model and an ema (target) Q model.",
+        "type": "comment"
+    },
+    "68": {
+        "file_id": 6,
+        "content": "        self.ema_model = EMA(\n            model,\n            include_online_model = False,\n            **q_target_ema_kwargs\n        )\n        self.max_grad_norm = max_grad_norm\n        self.optimizer = get_adam_optimizer(\n            model.parameters(),\n            lr = learning_rate,\n            wd = weight_decay,\n            **optimizer_kwargs\n        )\n        if not exists(accelerator):\n            accelerator = Accelerator(\n                kwargs_handlers = [\n                    DistributedDataParallelKwargs(find_unused_parameters = True)\n                ],\n                **accelerator_kwargs\n            )\n        self.accelerator = accelerator\n        self.min_reward = min_reward\n        self.monte_carlo_return = monte_carlo_return\n        self.dataloader = DataLoader(\n            dataset,\n            batch_size = batch_size,\n            **dataloader_kwargs\n        )\n        # prepare\n        (\n            self.model,\n            self.ema_model,\n            self.optimizer,\n            self.dataloader\n        ) = self.accelerator.prepare(",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:128-169"
+    },
+    "69": {
+        "file_id": 6,
+        "content": "The code initializes model-related components and accelerator for a Q learner. It creates an exponential moving average (EMA) model, sets the maximum gradient norm, gets an optimizer, initializes an accelerator with distributed data parallelism, sets minimum reward and Monte Carlo return settings, and prepares the dataloader. The components are then prepared using the provided accelerator.",
+        "type": "comment"
+    },
+    "70": {
+        "file_id": 6,
+        "content": "            self.model,\n            self.ema_model,\n            self.optimizer,\n            self.dataloader\n        )\n        # checkpointing related\n        self.checkpoint_every = checkpoint_every\n        self.checkpoint_folder = Path(checkpoint_folder)\n        self.checkpoint_folder.mkdir(exist_ok = True, parents = True)\n        assert self.checkpoint_folder.is_dir()\n        # dummy loss\n        self.register_buffer('zero', torch.tensor(0.))\n        # training step related\n        self.num_train_steps = num_train_steps\n        self.grad_accum_every = grad_accum_every\n        self.register_buffer('step', torch.tensor(0))\n    def save(\n        self,\n        checkpoint_num = None,\n        overwrite = True\n    ):\n        name = 'checkpoint'\n        if exists(checkpoint_num):\n            name += f'-{checkpoint_num}'\n        path = self.checkpoint_folder / (name + '.pt')\n        assert overwrite or not path.exists()\n        pkg = dict(\n            model = self.unwrap(self.model).state_dict(),\n            ema_model = self.unwrap(self.ema_model).state_dict(),",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:170-210"
+    },
+    "71": {
+        "file_id": 6,
+        "content": "This code initializes a QTransformer model and sets up training parameters. It also creates an empty buffer 'zero' for loss calculation, and registers a step counter. The save method is used to store checkpoints of the model's state dictionary.",
+        "type": "comment"
+    },
+    "72": {
+        "file_id": 6,
+        "content": "            optimizer = self.optimizer.state_dict(),\n            step = self.step.item()\n        )\n        torch.save(pkg, str(path))\n    def load(self, path):\n        path = Path(path)\n        assert exists(path)\n        pkg = torch.load(str(path))\n        self.unwrap(self.model).load_state_dict(pkg['model'])\n        self.unwrap(self.ema_model).load_state_dict(pkg['ema_model'])\n        self.optimizer.load_state_dict(pkg['optimizer'])\n        self.step.copy_(pkg['step'])\n    @property\n    def device(self):\n        return self.accelerator.device\n    @property\n    def is_main(self):\n        return self.accelerator.is_main_process\n    def unwrap(self, module):\n        return self.accelerator.unwrap_model(module)\n    def print(self, msg):\n        return self.accelerator.print(msg)\n    def wait(self):\n        return self.accelerator.wait_for_everyone()\n    def get_discount_matrix(self, timestep):\n        if exists(self.discount_matrix) and self.discount_matrix.shape[-1] >= timestep:\n            return self.discount_matrix[:timestep, :timestep]",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:211-248"
+    },
+    "73": {
+        "file_id": 6,
+        "content": "The code defines a class with methods for saving and loading model state, getting the device used for training, checking if it's the main process, unwrapping models, printing messages, and waiting for all processes to finish. The class also provides a method to get the discount matrix based on timesteps.",
+        "type": "comment"
+    },
+    "74": {
+        "file_id": 6,
+        "content": "        timestep_arange = torch.arange(timestep, device = self.accelerator.device)\n        powers = (timestep_arange[None, :] - timestep_arange[:, None])\n        discount_matrix = torch.triu(self.discount_factor_gamma ** powers)\n        self.register_buffer('discount_matrix', discount_matrix, persistent = False)\n        return self.discount_matrix\n    def q_learn(\n        self,\n        text_embeds:    TensorType['b', 'd', float],\n        states:         TensorType['b', 'c', 'f', 'h', 'w', float],\n        actions:        TensorType['b', int],\n        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],\n        reward:         TensorType['b', float],\n        done:           TensorType['b', bool],\n        *,\n        monte_carlo_return = None\n    ) -> Tuple[TensorType[()], QIntermediates]:\n        # 'next' stands for the very next time step (whether state, q, actions etc)\n        γ = self.discount_factor_gamma\n        not_terminal = (~done).float()\n        # first make a prediction with online q robotic transformer",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:250-274"
+    },
+    "75": {
+        "file_id": 6,
+        "content": "The code defines the `q_learner` class that computes a discount matrix and performs Q-learning by taking input tensors of text embeddings, states, actions, next states, rewards, and done status. It uses the discount factor gamma (γ) and calculates not_terminal values by inverting the done tensor. The code then predicts with an online Q transformer for reinforcement learning.",
+        "type": "comment"
+    },
+    "76": {
+        "file_id": 6,
+        "content": "        # select out the q-values for the action that was taken\n        q_pred_all_actions = self.model(states, text_embeds = text_embeds)\n        q_pred = batch_select_indices(q_pred_all_actions, actions)\n        # use an exponentially smoothed copy of model for the future q target. more stable than setting q_target to q_eval after each batch\n        # the max Q value is taken as the optimal action is implicitly the one with the highest Q score\n        q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)\n        q_next.clamp_(min = default(monte_carlo_return, -1e4))\n        # Bellman's equation. most important line of code, hopefully done correctly\n        q_target = reward + not_terminal * (γ * q_next)\n        # now just force the online model to be able to predict this target\n        loss = F.mse_loss(q_pred, q_target)\n        # that's it. ~5 loc for the heart of q-learning\n        # return loss and some of the intermediates for logging\n        return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:275-297"
+    },
+    "77": {
+        "file_id": 6,
+        "content": "This code implements the core Q-learning algorithm, selecting the Q-values for taken actions, using an exponentially smoothed model for future Q targets, applying Bellman's equation, and minimizing loss via mean squared error. It returns the loss and relevant intermediates for logging purposes.",
+        "type": "comment"
+    },
+    "78": {
+        "file_id": 6,
+        "content": "    def n_step_q_learn(\n        self,\n        text_embeds:    TensorType['b', 'd', float],\n        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],\n        actions:        TensorType['b', 't', int],\n        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],\n        rewards:        TensorType['b', 't', float],\n        dones:          TensorType['b', 't', bool],\n        *,\n        monte_carlo_return = None\n    ) -> Tuple[TensorType[()], QIntermediates]:\n        \"\"\"\n        einops\n        b - batch\n        c - channels\n        f - frames\n        h - height\n        w - width\n        t - timesteps\n        a - action bins\n        q - q values\n        d - text cond dimension\n        \"\"\"\n        num_timesteps, device = states.shape[1], states.device\n        # fold time steps into batch\n        states, time_ps = pack_one(states, '* c f h w')\n        text_embeds, _ = pack_one(text_embeds, '* d')\n        # repeat text embeds per timestep\n        repeated_text_embeds = repeat(text_embeds, 'b ... -> (b n) ...', n = num_timesteps)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:299-334"
+    },
+    "79": {
+        "file_id": 6,
+        "content": "This function performs n-step Q-learning on a batch of data, taking in embedding vectors and state arrays. It packs the state arrays into a single array, repeats text embeddings per timestep, and then continues with further computations.",
+        "type": "comment"
+    },
+    "80": {
+        "file_id": 6,
+        "content": "        γ = self.discount_factor_gamma\n        # anything after the first done flag will be considered terminal\n        dones = dones.cumsum(dim = -1) > 0\n        dones = F.pad(dones, (1, 0), value = False)\n        not_terminal = (~dones).float()\n        # get q predictions\n        actions = rearrange(actions, 'b t -> (b t)')\n        q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds)\n        q_pred = batch_select_indices(q_pred_all_actions, actions)\n        q_pred = unpack_one(q_pred, time_ps, '*')\n        q_next = self.ema_model(next_states, text_embeds = text_embeds).amax(dim = -1)\n        q_next.clamp_(min = default(monte_carlo_return, -1e4))\n        # prepare rewards and discount factors across timesteps\n        rewards, _ = pack([rewards, q_next], 'b *')\n        γ = self.get_discount_matrix(num_timesteps + 1)[:-1, :]\n        # account for discounting using the discount matrix\n        q_target = einsum('b t, q t -> b q', not_terminal * rewards, γ)\n        # have transformer learn to predict above Q target",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:336-366"
+    },
+    "81": {
+        "file_id": 6,
+        "content": "The code calculates Q-values for each action in a batch and then selects the corresponding Q-value for the current action. It also applies discounting using the discount matrix, and the model learns to predict Q-target values for non-terminal states.",
+        "type": "comment"
+    },
+    "82": {
+        "file_id": 6,
+        "content": "        loss = F.mse_loss(q_pred, q_target)\n        # prepare q prediction\n        q_pred_all_actions = unpack_one(q_pred_all_actions, time_ps, '* a')\n        return loss, QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)\n    def autoregressive_q_learn_handle_single_timestep(\n        self,\n        text_embeds,\n        states,\n        actions,\n        next_states,\n        rewards,\n        dones,\n        *,\n        monte_carlo_return = None\n    ):\n        \"\"\"\n        simply detect and handle single timestep\n        and use `autoregressive_q_learn` as more general function\n        \"\"\"\n        if states.ndim == 5:\n            states = rearrange(states, 'b ... -> b 1 ...')\n        if actions.ndim == 2:\n            actions = rearrange(actions, 'b ... -> b 1 ...')\n        if rewards.ndim == 1:\n            rewards = rearrange(rewards, 'b -> b 1')\n        if dones.ndim == 1:\n            dones = rearrange(dones, 'b -> b 1')\n        return self.autoregressive_q_learn(text_embeds, states, actions, next_states, rewards, dones, monte_carlo_return = monte_carlo_return)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:368-403"
+    },
+    "83": {
+        "file_id": 6,
+        "content": "This code defines a function for the Q-learner model in the q_transformer package. It calculates the loss between predicted Q values (q_pred) and target Q values (q_target). The function prepares the Q prediction by unpacking it, and returns both the loss and an object containing all intermediate Q predictions. Additionally, there is a separate function called `autoregressive_q_learn_handle_single_timestep` which handles single-step timesteps and calls the more general `autoregressive_q_learn` function for other cases. The code also performs array reshaping to handle different input dimensions.",
+        "type": "comment"
+    },
+    "84": {
+        "file_id": 6,
+        "content": "    def autoregressive_q_learn(\n        self,\n        text_embeds:    TensorType['b', 'd', float],\n        states:         TensorType['b', 't', 'c', 'f', 'h', 'w', float],\n        actions:        TensorType['b', 't', 'n', int],\n        next_states:    TensorType['b', 'c', 'f', 'h', 'w', float],\n        rewards:        TensorType['b', 't', float],\n        dones:          TensorType['b', 't', bool],\n        *,\n        monte_carlo_return = None\n    ) -> Tuple[TensorType[()], QIntermediates]:\n        \"\"\"\n        einops\n        b - batch\n        c - channels\n        f - frames\n        h - height\n        w - width\n        t - timesteps\n        n - number of actions\n        a - action bins\n        q - q values\n        d - text cond dimension\n        \"\"\"\n        monte_carlo_return = default(monte_carlo_return, -1e4)\n        num_timesteps, device = states.shape[1], states.device\n        # fold time steps into batch\n        states, time_ps = pack_one(states, '* c f h w')\n        actions, _ = pack_one(actions, '* n')\n        text_embeds, _ = pack_one(text_embeds, '* d')",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:405-438"
+    },
+    "85": {
+        "file_id": 6,
+        "content": "This function, `autoregressive_q_learn`, performs a type of reinforcement learning called \"Monte Carlo\" method to update the Q-values (a.k.a quality values) of an agent's actions in a given state based on observed rewards and terminal signals from the environment. It takes in tensors for text embeddings, states, actions, next states, rewards, and dones. The function returns a tuple consisting of a tensor for the updated Q-values (q), and intermediates related to the computation process.",
+        "type": "comment"
+    },
+    "86": {
+        "file_id": 6,
+        "content": "        # repeat text embeds per timestep\n        repeated_text_embeds = repeat(text_embeds, 'b ... -> (b n) ...', n = num_timesteps)\n        # anything after the first done flag will be considered terminal\n        dones = dones.cumsum(dim = -1) > 0\n        dones = F.pad(dones, (1, -1), value = False)\n        not_terminal = (~dones).float()\n        # rewards should not be given on and after terminal step\n        rewards = rewards * not_terminal\n        # because greek unicode is nice to look at\n        γ = self.discount_factor_gamma\n        # get predicted Q for each action\n        # unpack back to (b, t, n)\n        q_pred_all_actions = self.model(states, text_embeds = repeated_text_embeds, actions = actions)\n        q_pred = batch_select_indices(q_pred_all_actions, actions)\n        q_pred = unpack_one(q_pred, time_ps, '* n')\n        # get q_next\n        q_next = self.ema_model(next_states, text_embeds = text_embeds)\n        q_next = q_next.max(dim = -1).values\n        q_next.clamp_(min = monte_carlo_return)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:440-470"
+    },
+    "87": {
+        "file_id": 6,
+        "content": "This code is implementing a Q-learning algorithm for text-based tasks. It repeats the text embeddings per timestep, identifies non-terminal steps, scales rewards accordingly, predicts Q values for each action using a model, and calculates q_next by taking the maximum value of the next state's predictions from an ema_model. The code also clamps q_next to be greater than or equal to the monte_carlo_return value.",
+        "type": "comment"
+    },
+    "88": {
+        "file_id": 6,
+        "content": "        # get target Q\n        # unpack back to - (b, t, n)\n        q_target_all_actions = self.ema_model(states, text_embeds = repeated_text_embeds, actions = actions)\n        q_target = q_target_all_actions.max(dim = -1).values\n        q_target.clamp_(min = monte_carlo_return)\n        q_target = unpack_one(q_target, time_ps, '* n')\n        # main contribution of the paper is the following logic\n        # section 4.1 - eq. 1\n        # first take care of the loss for all actions except for the very last one\n        q_pred_rest_actions, q_pred_last_action      = q_pred[..., :-1], q_pred[..., -1]\n        q_target_first_action, q_target_rest_actions = q_target[..., 0], q_target[..., 1:]\n        losses_all_actions_but_last = F.mse_loss(q_pred_rest_actions, q_target_rest_actions, reduction = 'none')\n        # next take care of the very last action, which incorporates the rewards\n        q_target_last_action, _ = pack([q_target_first_action[..., 1:], q_next], 'b *')\n        q_target_last_action = rewards + γ * q_target_last_action",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:472-495"
+    },
+    "89": {
+        "file_id": 6,
+        "content": "This code calculates the target Q values using an exponential moving average model, then clamps them to avoid negative values. It then separates the last action's target from the rest and calculates losses for all actions except the last one using mean squared error loss. Finally, it handles the last action separately by incorporating rewards and discounting future Q targets.",
+        "type": "comment"
+    },
+    "90": {
+        "file_id": 6,
+        "content": "        losses_last_action = F.mse_loss(q_pred_last_action, q_target_last_action, reduction = 'none')\n        # flatten and average\n        losses, _ = pack([losses_all_actions_but_last, losses_last_action], '*')\n        return losses.mean(), QIntermediates(q_pred_all_actions, q_pred, q_next, q_target)\n    def learn(\n        self,\n        *args,\n        min_reward: Optional[float] = None,\n        monte_carlo_return: Optional[float] = None\n    ):\n        _, _, actions, *_ = args\n        # q-learn kwargs\n        q_learn_kwargs = dict(\n            monte_carlo_return = monte_carlo_return\n        )\n        # main q-learning loss, respectively\n        # 1. proposed autoregressive q-learning for multiple actions - (handles single or n-step automatically)\n        # 2. single action - single timestep (classic q-learning)\n        # 3. single action - n-steps\n        if self.is_multiple_actions:\n            td_loss, q_intermediates = self.autoregressive_q_learn_handle_single_timestep(*args, **q_learn_kwargs)\n            num_timesteps = actions.shape[1]",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:497-526"
+    },
+    "91": {
+        "file_id": 6,
+        "content": "The code defines a Q-Learner class with methods for calculating Q-learning losses and performing Q-learning updates. The `learn` method takes in actions, monte_carlo_return, and min_reward as optional parameters. The code handles three types of Q-learning: 1) autoregressive q-learning for multiple actions (handles single or n-step automatically), 2) classic q-learning with a single action at each timestep, and 3) q-learning with a single action but considering n-steps. The method calculates the main Q-learning loss using these different types of Q-learning and returns the losses and intermediate results (q_pred_all_actions, q_pred, q_next, q_target).",
+        "type": "comment"
+    },
+    "92": {
+        "file_id": 6,
+        "content": "        elif self.n_step_q_learning:\n            td_loss, q_intermediates = self.n_step_q_learn(*args, **q_learn_kwargs)\n            num_timesteps = actions.shape[1]\n        else:\n            td_loss, q_intermediates = self.q_learn(*args, **q_learn_kwargs)\n            num_timesteps = 1\n        if not self.has_conservative_reg_loss:\n            return loss, Losses(td_loss, self.zero)\n        # calculate conservative regularization\n        # section 4.2 in paper, eq 2\n        batch = actions.shape[0]\n        q_preds = q_intermediates.q_pred_all_actions\n        q_preds = rearrange(q_preds, '... a -> (...) a')\n        num_action_bins = q_preds.shape[-1]\n        num_non_dataset_actions = num_action_bins - 1\n        actions = rearrange(actions, '... -> (...) 1')\n        dataset_action_mask = torch.zeros_like(q_preds).scatter_(-1, actions, torch.ones_like(q_preds))\n        q_actions_not_taken = q_preds[~dataset_action_mask.bool()]\n        q_actions_not_taken = rearrange(q_actions_not_taken, '(b t a) -> b t a', b = batch, a = num_non_dataset_actions)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:528-555"
+    },
+    "93": {
+        "file_id": 6,
+        "content": "This code snippet checks whether n-step Q-learning or regular Q-learning is being used. It then calculates the TD loss and q_intermediates based on this. If conservative regularization is not enabled, it simply returns the loss and zero. Otherwise, it performs calculations to calculate conservative regularization according to section 4.2 in the paper (eq 2). This includes rearranging q_preds, creating action masks, and calculating q_actions_not_taken.",
+        "type": "comment"
+    },
+    "94": {
+        "file_id": 6,
+        "content": "        conservative_reg_loss = ((q_actions_not_taken - (min_reward * num_timesteps)) ** 2).sum() / num_non_dataset_actions\n        # total loss\n        loss =  0.5 * td_loss + \\\n                0.5 * conservative_reg_loss * self.conservative_reg_loss_weight\n        loss_breakdown = Losses(td_loss, conservative_reg_loss)\n        return loss, loss_breakdown\n    def forward(\n        self,\n        *,\n        monte_carlo_return: Optional[float] = None,\n        min_reward: Optional[float] = None\n    ):\n        monte_carlo_return = default(monte_carlo_return, self.monte_carlo_return)\n        min_reward = default(min_reward, self.min_reward)\n        step = self.step.item()\n        replay_buffer_iter = cycle(self.dataloader)\n        self.model.train()\n        self.ema_model.train()\n        while step < self.num_train_steps:\n            # zero grads\n            self.optimizer.zero_grad()\n            # main q-learning algorithm\n            for grad_accum_step in range(self.grad_accum_every):\n                is_last = grad_accum_step == (self.grad_accum_every - 1)",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:557-593"
+    },
+    "95": {
+        "file_id": 6,
+        "content": "This code snippet is from the Q-Transformer model's QLearner class. It calculates the total loss by combining the TD loss and conservative regularization loss, which penalizes actions not present in the dataset. The forward method sets default values for monte_carlo_return and min_reward, trains the model, and iterates through a replay buffer for the number of training steps specified. Gradients are accumulated over the gradient accumulation steps before being updated.",
+        "type": "comment"
+    },
+    "96": {
+        "file_id": 6,
+        "content": "                context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext\n                with self.accelerator.autocast(), context():\n                    loss, (td_loss, conservative_reg_loss) = self.learn(\n                        *next(replay_buffer_iter),\n                        min_reward = min_reward,\n                        monte_carlo_return = monte_carlo_return\n                    )\n                    self.accelerator.backward(loss / self.grad_accum_every)\n            self.print(f'td loss: {td_loss.item():.3f}')\n            # clip gradients (transformer best practices)\n            self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)\n            # take optimizer step\n            self.optimizer.step()\n            # update target ema\n            self.wait()\n            self.ema_model.update()\n            # increment step\n            step += 1\n            self.step.add_(1)\n            # whether to checkpoint or not\n            self.wait()\n            if self.is_main and is_divisible(step, self.checkpoint_every):",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:594-631"
+    },
+    "97": {
+        "file_id": 6,
+        "content": "The code is training a model using an accelerator for synchronization and automatic differentiation. It applies loss calculation, gradient clipping (Transformer best practice), optimizer step, updates the target ema (exponential moving average) model, increments the step counter, and checks if it's time to perform a checkpointing operation. The code also handles asynchronous computation by using partial application of accelerator's no_sync method on the model for non-last iterations.",
+        "type": "comment"
+    },
+    "98": {
+        "file_id": 6,
+        "content": "                checkpoint_num = step // self.checkpoint_every\n                self.save(checkpoint_num)\n            self.wait()\n        self.print('training complete')",
+        "type": "code",
+        "location": "/q_transformer/q_learner.py:632-637"
+    },
+    "99": {
+        "file_id": 6,
+        "content": "The code saves a checkpoint every self.checkpoint_every steps, then waits before printing \"training complete\".",
+        "type": "comment"
+    }
+}
