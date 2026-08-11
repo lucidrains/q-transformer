@@ -44,7 +44,7 @@ class MockReplayDataset(Dataset):
 
     def __getitem__(self, _):
 
-        instruction = "please clean the kitchen"
+        text_embeds = torch.randn(1, 768)
         state = torch.randn(3, *self.video_shape)
 
         if self.num_actions == 1:
@@ -53,10 +53,11 @@ class MockReplayDataset(Dataset):
             action = torch.randint(0, self.num_action_bins + 1, (self.num_actions,))
 
         next_state = torch.randn(3, *self.video_shape)
+        next_text_embeds = torch.randn(768)
         reward = torch.tensor(randrange(2))
         done = torch.tensor(randrange(2), dtype = torch.bool)
 
-        return instruction, state, action, next_state, reward, done
+        return text_embeds, state, action, next_state, next_text_embeds, reward, done
 
 class MockReplayNStepDataset(Dataset):
     def __init__(
@@ -81,11 +82,12 @@ class MockReplayNStepDataset(Dataset):
 
         action_dims = (self.num_actions,) if self.num_actions > 1 else tuple()
 
-        instruction = "please clean the kitchen"
+        text_embeds = torch.randn(*self.time_shape, 768)
         state = torch.randn(*self.time_shape, 3, *self.video_shape)
         action = torch.randint(0, self.num_action_bins + 1, (*self.time_shape, *action_dims))
         next_state = torch.randn(3, *self.video_shape)
+        next_text_embeds = torch.randn(768)
         reward = torch.randint(0, 2, self.time_shape)
         done = torch.zeros(self.time_shape, dtype = torch.bool)
 
-        return instruction, state, action, next_state, reward, done
+        return text_embeds, state, action, next_state, next_text_embeds, reward, done

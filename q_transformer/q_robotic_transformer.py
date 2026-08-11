@@ -233,7 +233,7 @@ class Dropsample(Module):
     def __init__(self, prob = 0):
         super().__init__()
         self.prob = prob
-  
+
     def forward(self, x):
         batch, device = x.shape[0], x.device
 
@@ -838,6 +838,10 @@ class QHeadSingleAction(Module):
 
     def get_random_actions(self, batch_size):
         return torch.randint(0, self.action_bins, (batch_size,), device = self.device)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
     def get_optimal_actions(
         self,

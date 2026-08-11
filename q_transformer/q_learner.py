@@ -123,6 +123,7 @@ class QLearner(Module):
         conservative_reg_loss_weight = 1., # they claim 1. is best in paper
         checkpoint_folder = './checkpoints',
         checkpoint_every = 1000,
+        log_every = 25,
     ):
         super().__init__()
 
@@ -212,6 +213,7 @@ class QLearner(Module):
         # checkpointing related
 
         self.checkpoint_every = checkpoint_every
+        self.log_every = log_every
         self.checkpoint_folder = Path(checkpoint_folder)
 
         self.checkpoint_folder.mkdir(exist_ok = True, parents = True)
@@ -601,11 +603,15 @@ class QLearner(Module):
             num_timesteps = actions.shape[1]
 
         else:
-            td_loss, q_intermediates = self.q_learn(*args, **q_learn_kwargs)
+            # the same instruction (or none) applies to the entire trajectory,
+            # so there is no separate text embed for the next state
+
+            text_embeds, states, actions, next_states, _, reward, done = args
+            td_loss, q_intermediates = self.q_learn(text_embeds, states, actions, next_states, reward, done, **q_learn_kwargs)
             num_timesteps = 1
 
         if not self.has_conservative_reg_loss:
-            return loss, Losses(td_loss, self.zero)
+            return td_loss, Losses(td_loss, self.zero)
 
         # calculate conservative regularization
         # section 4.2 in paper, eq 2
@@ -674,7 +680,8 @@ class QLearner(Module):
 
                     self.accelerator.backward(loss / self.grad_accum_every)
 
-            self.print(f'td loss: {td_loss.item():.3f}')
+            if is_divisible(step, self.log_every) or step == (self.num_train_steps - 1):
+                self.print(f'step {step + 1} / {self.num_train_steps} | td loss: {td_loss.item():.3f}')
 
             # clip gradients (transformer best practices)
 

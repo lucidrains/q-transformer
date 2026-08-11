@@ -12,6 +12,8 @@ from torch.utils.data import Dataset
 
 from einops import rearrange
 
+from torch_einops_utils import lens_to_mask
+
 from q_transformer.q_robotic_transformer import QRoboticTransformer
 
 from q_transformer.tensor_typing import Float, Bool
@@ -50,22 +52,28 @@ class ReplayMemoryDataset(Dataset):
     def __init__(
         self,
         folder: str = DEFAULT_REPLAY_MEMORIES_FOLDER,
-        num_timesteps: int = 1
+        num_timesteps: int = 1,
+        condition_on_text: bool = True
     ):
         assert num_timesteps >= 1
         self.is_single_timestep = num_timesteps == 1
         self.num_timesteps = num_timesteps
+        self.condition_on_text = condition_on_text
 
         folder = Path(folder)
         assert folder.exists() and folder.is_dir()
 
-        text_embeds_path = folder / TEXT_EMBEDS_FILENAME
         states_path = folder / STATES_FILENAME
         actions_path = folder / ACTIONS_FILENAME
         rewards_path = folder / REWARDS_FILENAME
         dones_path = folder / DONES_FILENAME
 
-        self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'r')
+        self.text_embeds = None
+
+        if condition_on_text:
+            text_embeds_path = folder / TEXT_EMBEDS_FILENAME
+            self.text_embeds = open_memmap(str(text_embeds_path), dtype = 'float32', mode = 'r')
+
         self.states = open_memmap(str(states_path), dtype = 'float32', mode = 'r')
         self.actions = open_memmap(str(actions_path), dtype = 'int', mode = 'r')
         self.rewards = open_memmap(str(rewards_path), dtype = 'float32', mode = 'r')
@@ -82,7 +90,9 @@ class ReplayMemoryDataset(Dataset):
 
         trainable_episode_indices = self.episode_length >= num_timesteps
 
-        self.text_embeds = self.text_embeds[trainable_episode_indices]
+        if condition_on_text:
+            self.text_embeds = self.text_embeds[trainable_episode_indices]
+
         self.states = self.states[trainable_episode_indices]
         self.actions = self.actions[trainable_episode_indices]
         self.rewards = self.rewards[trainable_episode_indices]
@@ -101,7 +111,14 @@ class ReplayMemoryDataset(Dataset):
             timestep_arange
         ), dim = -1)
 
-        trainable_mask = timestep_arange < rearrange(torch.from_numpy(self.episode_length) - num_timesteps, 'e -> e 1')
+        # include the terminal transition of each episode (t <= episode_length - num_timesteps),
+        # so that the done flag and terminal reward can propagate into the q-learning
+
+        trainable_mask = lens_to_mask(
+            torch.from_numpy(self.episode_length) - num_timesteps + 1,
+            self.max_episode_len
+        )
+
         self.indices = timestep_indices[trainable_mask]
 
     def __len__(self):
@@ -112,15 +129,23 @@ class ReplayMemoryDataset(Dataset):
 
         timestep_slice = slice(timestep_index, (timestep_index + self.num_timesteps))
 
-        text_embeds = self.text_embeds[episode_index, timestep_slice].copy()
+        text_embeds = None
+
+        if self.condition_on_text:
+            text_embeds = self.text_embeds[episode_index, timestep_slice].copy()
+
         states = self.states[episode_index, timestep_slice].copy()
         actions = self.actions[episode_index, timestep_slice].copy()
         rewards = self.rewards[episode_index, timestep_slice].copy()
         dones = self.dones[episode_index, timestep_slice].copy()
 
-        next_state_timestep = min(timestep_index, self.max_episode_len - 1)
+        next_state_timestep = min(timestep_index + self.num_timesteps, self.max_episode_len - 1)
         next_state = self.states[episode_index, next_state_timestep].copy()
-        next_text_embed = self.text_embeds[episode_index, next_state_timestep].copy()
+
+        next_text_embed = None
+
+        if self.condition_on_text:
+            next_text_embed = self.text_embeds[episode_index, next_state_timestep].copy()
 
         return text_embeds, states, actions, next_state, next_text_embed, rewards, dones
 
@@ -174,7 +199,7 @@ class Agent(Module):
     ):
         super().__init__()
         self.q_transformer = q_transformer
-    
+
         condition_on_text = q_transformer.condition_on_text
         self.condition_on_text = condition_on_text
 
